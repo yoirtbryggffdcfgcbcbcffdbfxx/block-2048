@@ -1,0 +1,1929 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Égaliseur Numérique Céleste</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="manifest" href="/manifest.json">
+    <style>
+        /* Réinitialisation de base pour supprimer les marges par défaut */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw; /* 100% de la largeur du viewport */
+            height: 100vh; /* 100% de la hauteur du viewport */
+            overflow: hidden; /* Empêche tout défilement */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: sans-serif;
+            background-color: #333; /* Couleur de fond par défaut pour éviter le blanc */
+            -webkit-user-select: none; /* Désactive la sélection de texte sur iOS */
+            -ms-user-select: none; /* Désactive la sélection de texte sur Edge */
+            user-select: none; /* Désactive la sélection de texte */
+            touch-action: manipulation; /* Optimisation tactile pour éviter les comportements de scroll/zoom */
+        }
+
+        /* Empêcher le menu contextuel du clic droit sur le canvas */
+        canvas {
+            -webkit-touch-callout: none; /* Désactive les callouts sur iOS */
+            -webkit-user-select: none; /* Empêche la sélection de texte */
+        }
+
+        /* Canvas de l'arrière-plan "fantomatique" */
+        #backgroundCanvas {
+            position: fixed; /* Fixe par rapport au viewport */
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0; /* En arrière-plan */
+            display: block;
+        }
+
+        /* Conteneur principal du jeu pour qu'il prenne tout l'écran */
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative; /* Pour positionner les éléments absolus relatifs à ce conteneur */
+            width: 100%; /* Prend toute la largeur disponible du body */
+            height: 100%; /* Prend toute la hauteur disponible du body */
+            overflow: hidden; /* Assure que rien ne déborde */
+            z-index: 1; /* Au-dessus du backgroundCanvas */
+        }
+
+        canvas#gameCanvas { /* S'assurer de cibler le bon canvas */
+            border: 2px solid #333;
+            display: block; /* Supprime l'espace sous le canvas */
+            /* Le canvas sera dimensionné par JS pour couvrir le maximum d'espace sans déformation */
+            position: absolute; /* Permet aux UI d'être au-dessus */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* Centrer le canvas */
+            z-index: 2; /* Au-dessus du conteneur et du background */
+        }
+
+        /* Styles des éléments UI */
+        #game-info, #pause-button, #power-display, #restart-button, #stickman-container, #touch-controls, #fullscreen-button {
+            position: absolute;
+            z-index: 100; /* Assure qu'ils sont au-dessus du gameCanvas */
+        }
+
+        #game-info {
+            /* Utilisation de env() pour les safe areas */
+            top: max(1vh, env(safe-area-inset-top));
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: clamp(14px, 3.5vw, 20px); /* Taille de police fluide */
+            color: #333;
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 0.5vh 2vw;
+            border-radius: 8px;
+            min-width: 150px;
+            white-space: nowrap;
+            box-sizing: border-box; /* Inclure padding dans la largeur/hauteur */
+        }
+        #player-value-display {
+            font-weight: bold;
+        }
+        #restart-button {
+            display: none;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 2vh 4vw;
+            font-size: clamp(18px, 5vw, 28px);
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 200; /* Au-dessus de tout le reste */
+        }
+        #pause-button {
+            /* Utilisation de env() pour les safe areas */
+            top: max(1vh, env(safe-area-inset-top));
+            right: max(1vw, env(safe-area-inset-right));
+            padding: 1.5vh 3vw;
+            font-size: clamp(14px, 3.5vw, 20px);
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+        #level-display {
+            font-weight: bold;
+            color: #007BFF;
+        }
+        #power-display {
+            /* Utilisation de env() pour les safe areas */
+            bottom: max(1vh, env(safe-area-inset-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: clamp(12px, 3vw, 18px);
+            color: #333;
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 0.5vh 2vw;
+            border-radius: 8px;
+            display: flex;
+            gap: 1vw; /* Espacement fluide */
+            align-items: center;
+            box-sizing: border-box;
+        }
+        .power-slot {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .power-button {
+            width: clamp(40px, 10vw, 60px); /* Taille fluide */
+            height: clamp(40px, 10vw, 60px);
+            background-color: #555;
+            color: white;
+            border: 2px solid #333;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: clamp(18px, 5vw, 30px);
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+            position: relative;
+        }
+        .power-button.active {
+            background-color: #007bff;
+            border-color: #0056b3;
+        }
+        .power-button.cooldown {
+            background-color: #888;
+            cursor: not-allowed;
+        }
+        .power-button.disabled {
+            background-color: #444;
+            color: #bbb;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* Stickman Container */
+        #stickman-container {
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            z-index: 300;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            position: absolute; /* Géré par JS */
+        }
+
+        #stickman-dialogue {
+            background-color: white;
+            color: #333;
+            padding: 1.5vh 3vw;
+            border-radius: 15px;
+            text-align: center;
+            font-size: clamp(14px, 3.5vw, 20px);
+            margin-bottom: 5px;
+            max-width: 80vw; /* Plus large pour les longs textes */
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border: 1px solid #333;
+            box-sizing: border-box;
+        }
+
+        #stickman-dialogue::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 10px solid white;
+            filter: drop-shadow(0 2px 1px rgba(0,0,0,0.2));
+        }
+
+        #stickman-body {
+            width: clamp(100px, 20vw, 150px);
+            height: clamp(100px, 20vw, 150px);
+            position: relative;
+            animation: stickmanIdle 2s infinite alternate;
+        }
+
+        @keyframes stickmanIdle {
+            0% { transform: translateY(0px); }
+            100% { transform: translateY(-3px); }
+        }
+
+        /* Contrôles tactiles */
+        #touch-controls {
+            /* Utilisation de env() pour les safe areas */
+            bottom: max(1vh, env(safe-area-inset-bottom));
+            width: calc(98% - env(safe-area-inset-left) - env(safe-area-inset-right)); /* Ajuster la largeur */
+            left: max(1vw, env(safe-area-inset-left)); /* Décalage pour aligner avec le reste */
+            transform: translateX(calc(-50% + max(1vw, env(safe-area-inset-left)))); /* Ajuster pour le centrage si left n'est pas 0 */
+            display: flex;
+            justify-content: space-between;
+            padding: 1vh 0;
+            box-sizing: border-box;
+            pointer-events: auto; /* Doit être auto pour être cliquable */
+            opacity: 1;
+        }
+        .touch-button {
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2.5vh 5vw;
+            font-size: clamp(24px, 6vw, 40px);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            flex-grow: 1;
+            margin: 0 1vw;
+            pointer-events: auto;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .touch-button:active {
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        #touch-controls.hidden-on-power-select {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Bouton plein écran */
+        #fullscreen-button {
+            /* Utilisation de env() pour les safe areas */
+            position: absolute; /* Re-déclaré pour éviter des conflits */
+            top: max(1vh, env(safe-area-inset-top));
+            left: max(1vw, env(safe-area-inset-left));
+            padding: 1.5vh 3vw;
+            font-size: clamp(14px, 3.5vw, 20px);
+            cursor: pointer;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 100;
+            box-sizing: border-box;
+            /* Le bouton sera masqué si la PWA est lancée en fullscreen ou standalone */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="backgroundCanvas"></canvas> <div id="game-container">
+        <div id="game-info">
+            Score : <span id="score">0</span> | Meilleur : <span id="highScoreDisplay">0</span><br>
+            Mon nombre : <span id="player-value-display">2</span> | Niveau : <span id="level-display">1</span>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        
+        <button id="fullscreen-button">Plein écran</button>
+        <button id="pause-button">Pause</button>
+
+        <button id="restart-button">Rejouer</button>
+
+        <div id="power-display">
+            <div class="power-slot">
+                <button id="destroy-power-button" class="power-button disabled"><i class="fas fa-crosshairs"></i></button>
+            </div>
+        </div>
+
+        <div id="stickman-container">
+            <div id="stickman-dialogue"></div>
+            <canvas id="stickman-body"></canvas>
+        </div>
+
+        <div id="touch-controls">
+            <button id="touch-left" class="touch-button">←</button>
+            <button id="touch-right" class="touch-button">→</button>
+        </div>
+    </div>
+
+    <script src="colors.js"></script>
+
+    <script>
+        const gameCanvas = document.getElementById('gameCanvas'); // Renommé pour clarté
+        const ctx = gameCanvas.getContext('2d');
+
+        const backgroundCanvas = document.getElementById('backgroundCanvas'); // Nouveau canvas
+        const bgCtx = backgroundCanvas.getContext('2d'); // Contexte du nouveau canvas
+
+        const scoreDisplay = document.getElementById('score');
+        const highScoreDisplay = document.getElementById('highScoreDisplay');
+        const playerValueDisplay = document.getElementById('player-value-display');
+        const restartButton = document.getElementById('restart-button');
+        const pauseButton = document.getElementById('pause-button');
+        const levelDisplay = document.getElementById('level-display');
+        const fullscreenButton = document.getElementById('fullscreen-button');
+
+        const destroyPowerButton = document.getElementById('destroy-power-button');
+
+        const stickmanContainer = document.getElementById('stickman-container');
+        const stickmanDialogue = document.getElementById('stickman-dialogue');
+        const stickmanBody = document.getElementById('stickman-body');
+        const stickmanCtx = stickmanBody.getContext('2d');
+
+        const touchControls = document.getElementById('touch-controls');
+        const touchLeftButton = document.getElementById('touch-left');
+        const touchRightButton = document.getElementById('touch-right');
+
+        // Variables du jeu (dimensionnement initial, sera ajusté)
+        let player = {
+            x: 0, // Sera calculé
+            y: 0, // Sera calculé
+            width: 50,
+            height: 50,
+            speedX: 0,
+            basePlayerSpeed: 7,
+            playerSpeed: 7,
+            value: 2
+        };
+
+        let OBSTACLE_FIXED_WIDTH = 50;
+        let OBSTACLE_FIXED_HEIGHT = 50;
+        const CORNER_RADIUS = 8;
+
+        let obstacles = [];
+        let score = 0;
+        let highScore = localStorage.getItem('numericEvaderHighScore') || 0;
+        let gameSpeed = 2;
+        let gameOver = false;
+        let isPaused = false;
+        let lastObstacleTime = 0;
+        const obstacleMinInterval = 400;
+        const obstacleMaxInterval = 800;
+        let nextObstacleInterval = Math.random() * (obstacleMaxInterval - obstacleMinInterval) + obstacleMinInterval;
+
+        let currentLevel = 1;
+        let fusionsThisLevel = 0;
+        const fusionsPerLevel = 10;
+        const fusionsForPower = 5;
+        let fusionsSinceLastPower = 0;
+
+        let particles = [];
+        const TEXT_PARTICLE_COUNT = 15;
+        const TEXT_PARTICLE_LIFETIME = 90;
+        const TEXT_PARTICLE_SPEED_Y_MAX = 2;
+        const TEXT_PARTICLE_SPEED_X_MAX = 1;
+
+        let playerScale = 1;
+        const PLAYER_SCALE_MAX = 1.2;
+        const PLAYER_SCALE_SPEED_UP = 0.05;
+        const PLAYER_SCALE_SPEED_DOWN = 0.02;
+
+        const BACKGROUND_COLORS = [
+            '#4B0082', '#0000FF', '#00BFFF', '#00FF00', '#FFFF00', '#FF7F00', '#FF0000', '#EE82EE', '#8A2BE2'
+        ];
+        let currentBackgroundColorIndex = 0;
+        let transitioningBackground = false;
+        let transitionStartTime = 0;
+        const TRANSITION_DURATION = 1500;
+        let startColor = BACKGROUND_COLORS[0];
+        let targetColor = BACKGROUND_COLORS[0];
+        let interpolatedColor = BACKGROUND_COLORS[0];
+
+        const numLightRays = 20;
+        const rayMinSpeed = 0.8;
+        const rayMaxSpeed = 2.5;
+        let lightRays = [];
+
+        let numEqualizerBars = 25; // Sera ajusté
+        let barBaseHeight = 50; // Sera ajusté
+        let barMaxHeight = 200; // Sera ajusté
+        let barWidth = 20; // Sera ajusté
+        let barSpacing = 0; // Sera calculé
+        let equalizerBars = [];
+        let equalizerTime = 0;
+        const EQUALIZER_SPEED = 0.1;
+
+        let powerSelectionActive = false;
+        let availablePowers = [];
+        const NUM_POWER_OPTIONS = 3;
+
+        let powerOptions = [];
+        let powerSelectionAnimationFrame = 0;
+        let POWER_OPTION_HEIGHT = 160; // Sera ajusté
+        let POWER_OPTION_WIDTH = 450; // Sera ajusté
+        let POWER_OPTION_MARGIN = 20; // Sera ajusté
+        const POWER_ANIM_SPEED = 0.05;
+
+        const CARD_HOVER_SCALE_MAX = 1.05;
+        const CARD_HOVER_GLOW_MAX_ALPHA = 0.6;
+        const CARD_HOVER_GLOW_SPEED = 0.05;
+        let glowAlpha = 0;
+        let glowDirection = 1;
+
+        const powerIconCodes = {
+            "Invulnérabilité": { char: '\uf132', font: 'Font Awesome 6 Free', class: 'fas' },
+            "Flash": { char: '\uf0e7', font: 'Font Awesome 6 Free', class: 'fas' },
+            "Destruction": { char: '\uf06d', font: 'Font Awesome 6 Free', class: 'fas' }
+        };
+
+        let unlockedPowers = {
+            'Invulnérabilité': false,
+            'Flash': false,
+            'Destruction': false
+        };
+
+        let isInvulnerable = false;
+        const INVULNERABILITY_DURATION = 3000;
+        let invulnerabilityEndTime = 0;
+
+        let isSpeedBoostActive = false;
+        const SPEED_BOOST_DURATION = 5000;
+        const SPEED_BOOST_FACTOR = 1.4;
+        let speedBoostEndTime = 0;
+
+        let destroyShot = null;
+        const PROJECTILE_SPEED = 15;
+        const PROJECTILE_SIZE = 15;
+        const DESTROY_COOLDOWN_BETWEEN_SHOTS = 10000;
+        let destroyLastShotTime = 0;
+        let destroyCharges = 0;
+        const MAX_DESTROY_CHARGES = 2;
+
+
+        // --- Adaptation du jeu à la taille de l'écran ---
+        function resizeGame() {
+            // Ajustement du gameCanvas (le jeu principal)
+            const gameAspectRatio = 700 / 600; // Ratio original du jeu
+            
+            let newGameCanvasWidth = window.innerWidth;
+            let newGameCanvasHeight = window.innerHeight;
+
+            // Déduire les safe areas des dimensions disponibles pour le jeu si nécessaire
+            // Note: Nous laissons les UI se positionner par rapport aux safe areas
+            // mais le canvas lui-même peut s'étendre sur les zones non-sûres s'il respecte le ratio
+            // Le calcul ci-dessous est déjà optimisé pour maximiser l'espace en gardant le ratio
+            if (newGameCanvasWidth / newGameCanvasHeight > gameAspectRatio) {
+                newGameCanvasWidth = newGameCanvasHeight * gameAspectRatio;
+            } else {
+                newGameCanvasHeight = newGameCanvasWidth / gameAspectRatio;
+            }
+
+            gameCanvas.width = newGameCanvasWidth;
+            gameCanvas.height = newGameCanvasHeight;
+
+            // Facteur d'échelle basé sur la largeur originale du jeu (700px)
+            const scaleFactor = gameCanvas.width / 700;
+
+            // Redimensionner les éléments du jeu en fonction du facteur d'échelle
+            player.width = 50 * scaleFactor;
+            player.height = 50 * scaleFactor;
+            player.basePlayerSpeed = 7 * scaleFactor;
+            player.playerSpeed = player.basePlayerSpeed;
+            player.y = gameCanvas.height - player.height - (10 * scaleFactor); // Ajuster position Y du joueur
+            player.x = gameCanvas.width / 2 - player.width / 2; // Ajuster la position de départ du joueur au centre
+
+
+            OBSTACLE_FIXED_WIDTH = 50 * scaleFactor;
+            OBSTACLE_FIXED_HEIGHT = 50 * scaleFactor;
+
+            // Ajustement du backgroundCanvas (le fond fantomatique)
+            backgroundCanvas.width = window.innerWidth;
+            backgroundCanvas.height = window.innerHeight;
+
+            // Redimensionner les paramètres de l'UI de sélection des pouvoirs
+            POWER_OPTION_HEIGHT = 160 * scaleFactor * 0.8;
+            POWER_OPTION_WIDTH = 450 * scaleFactor * 0.8;
+            POWER_OPTION_MARGIN = 20 * scaleFactor * 0.8;
+
+            // Ajustement des tailles pour le stickman
+            stickmanBody.width = 100 * scaleFactor;
+            stickmanBody.height = 100 * scaleFactor;
+
+            // Réinitialiser les éléments de fond avec les nouvelles dimensions
+            initializeBackgroundElements();
+            
+            console.log(`Game resized to: ${gameCanvas.width}x${gameCanvas.height}, Scale Factor: ${scaleFactor}`);
+            console.log(`Background canvas resized to: ${backgroundCanvas.width}x${backgroundCanvas.height}`);
+        }
+
+        // Appeler resizeGame au chargement et au redimensionnement de la fenêtre
+        window.addEventListener('load', () => {
+            resizeGame();
+            document.fonts.ready.then(() => {
+                console.log('Toutes les polices sont chargées, y compris Font Awesome !');
+                gameLoop();
+                // Assurez-vous que l'animation de fond commence aussi
+                if (isPaused) {
+                    lastPauseFrameTime = 0; // Reset pour un démarrage propre
+                    pauseBackgroundAnimationFrameId = requestAnimationFrame(animatePauseBackground);
+                }
+            }).catch(err => {
+                console.error('Erreur lors du chargement des polices :', err);
+                gameLoop();
+            });
+
+            // Gérer l'affichage du bouton plein écran si la PWA est en mode standalone/fullscreen
+            checkDisplayMode();
+        });
+        window.addEventListener('resize', resizeGame);
+
+        // Détecte le mode d'affichage pour masquer le bouton plein écran si en PWA
+        function checkDisplayMode() {
+            // window.matchMedia('(display-mode: standalone)').matches est la méthode standard
+            // navigator.standalone est spécifique à iOS Safari
+            const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            if (isPWA) {
+                fullscreenButton.style.display = 'none';
+            } else {
+                fullscreenButton.style.display = 'block'; // Afficher par défaut si ce n'est pas une PWA installée
+            }
+        }
+
+        function initializeBackgroundElements() {
+            // Les rayons et barres doivent être générés pour backgroundCanvas
+            lightRays = [];
+            for (let i = 0; i < numLightRays; i++) {
+                lightRays.push({
+                    x: Math.random() * backgroundCanvas.width,
+                    y: Math.random() * backgroundCanvas.height,
+                    length: (100 + Math.random() * 200) * (backgroundCanvas.width / 700), // Scaled par rapport au fond
+                    width: (5 + Math.random() * 10) * (backgroundCanvas.width / 700), // Scaled par rapport au fond
+                    speed: (rayMinSpeed + Math.random() * (rayMaxSpeed - rayMinSpeed)) * (backgroundCanvas.height / 600), // Scaled par rapport au fond
+                    offset: Math.random() * Math.PI * 2
+                });
+            }
+
+            equalizerBars = [];
+            barBaseHeight = 50 * (backgroundCanvas.height / 600);
+            barMaxHeight = 200 * (backgroundCanvas.height / 600);
+            barWidth = 20 * (backgroundCanvas.width / 700);
+            numEqualizerBars = Math.floor(backgroundCanvas.width / (barWidth + 5 * (backgroundCanvas.width / 700)));
+            barSpacing = (backgroundCanvas.width - numEqualizerBars * barWidth) / (numEqualizerBars + 1);
+
+            for (let i = 0; i < numEqualizerBars; i++) {
+                equalizerBars.push({
+                    x: (barWidth + barSpacing) * i + barSpacing,
+                    baseHeight: barBaseHeight + Math.random() * 20 * (backgroundCanvas.width / 700),
+                    amplitude: (Math.random() * (barMaxHeight - barBaseHeight) / 2 + 30) * (backgroundCanvas.width / 700),
+                    phase: Math.random() * Math.PI * 2,
+                    currentHeight: barBaseHeight,
+                    targetHeight: barBaseHeight
+                });
+            }
+        }
+
+        function generatePowerOfTwo(minPower, maxPower) {
+            const power = Math.floor(Math.random() * (maxPower - minPower + 1)) + minPower;
+            return Math.pow(2, power);
+        }
+
+        function drawRoundedRect(ctxToUse, x, y, width, height, radius) { // Prend ctxToUse en param
+            ctxToUse.beginPath();
+            ctxToUse.moveTo(x + radius, y);
+            ctxToUse.lineTo(x + width - radius, y);
+            ctxToUse.arcTo(x + width, y, x + width, y + radius, radius);
+            ctxToUse.lineTo(x + width, y + height - radius);
+            ctxToUse.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+            ctxToUse.lineTo(x + radius, y + height);
+            ctxToUse.arcTo(x, y + height, x, y + height - radius, radius);
+            ctxToUse.lineTo(x, y + radius);
+            ctxToUse.arcTo(x, y, x + radius, y, radius);
+            ctxToUse.closePath();
+            ctxToUse.fill();
+        }
+
+        function interpolateColor(color1, color2, factor) {
+            color1 = color1.startsWith('#') ? color1.slice(1) : color1;
+            color2 = color2.startsWith('#') ? color2.slice(1) : color2;
+
+            let r1 = parseInt(color1.substring(0, 2), 16);
+            let g1 = parseInt(color1.substring(2, 4), 16);
+            let b1 = parseInt(color1.substring(4, 6), 16);
+
+            let r2 = parseInt(color2.substring(0, 2), 16);
+            let g2 = parseInt(color2.substring(2, 4), 16);
+            let b2 = parseInt(color2.substring(4, 6), 16); 
+
+
+            let r = Math.round(r1 + factor * (r2 - r1));
+            let g = Math.round(g1 + factor * (g2 - g1));
+            let b = Math.round(b1 + factor * (b2 - b1));
+
+            r = Math.max(0, Math.min(255, r));
+            g = Math.max(0, Math.min(255, g));
+            b = Math.max(0, Math.min(255, b));
+
+            const toHex = c => ('0' + c.toString(16)).slice(-2).toUpperCase();
+            return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+        }
+
+        function darkenColor(hex, percent) {
+            hex = hex.slice(1);
+            let num = parseInt(hex, 16);
+            let r = (num >> 16) - (num >> 16) * percent / 100;
+            let g = ((num >> 8) & 0x00FF) - ((num >> 8) & 0x00FF) * percent / 100;
+            let b = (num & 0x0000FF) - (num & 0x0000FF) * percent / 100;
+
+            r = Math.round(Math.max(0, r));
+            g = Math.round(Math.max(0, g));
+            b = Math.round(Math.max(0, b));
+
+            return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        function drawBackground(ctxToUse, canvasToUse, alpha = 1) { // Ajout de ctxToUse, canvasToUse et alpha
+            ctxToUse.save();
+            ctxToUse.globalAlpha = alpha;
+
+            const gradient = ctxToUse.createLinearGradient(0, canvasToUse.height, 0, 0);
+            const darkerInterpolatedColor = darkenColor(interpolatedColor, 60);
+
+            gradient.addColorStop(0, darkerInterpolatedColor);
+            gradient.addColorStop(0.5, interpolatedColor);
+            gradient.addColorStop(1, '#FFFFFF');
+
+            ctxToUse.fillStyle = gradient;
+            ctxToUse.fillRect(0, 0, canvasToUse.width, canvasToUse.height);
+
+            for (let i = 0; i < lightRays.length; i++) {
+                const ray = lightRays[i];
+                ctxToUse.save();
+                const rayColor = interpolatedColor;
+                ctxToUse.fillStyle = `rgba(${parseInt(rayColor.slice(1,3), 16)}, ${parseInt(rayColor.slice(3,5), 16)}, ${parseInt(rayColor.slice(5,7), 16)}, ${0.2 + Math.sin(ray.offset + equalizerTime * 0.2) * 0.1})`;
+                
+                const currentWidth = ray.width + Math.sin(ray.offset + equalizerTime * 0.1) * (ray.width * 0.5);
+                ctxToUse.fillRect(ray.x - currentWidth / 2, ray.y, currentWidth, ray.length);
+                ctxToUse.restore();
+            }
+            ctxToUse.restore(); // Restore globalAlpha
+        }
+
+        function updateEqualizerBars(canvasToUse) { // Prend canvasToUse en param
+            equalizerTime += EQUALIZER_SPEED;
+            for (let i = 0; i < equalizerBars.length; i++) {
+                const bar = equalizerBars[i];
+                bar.currentHeight = bar.baseHeight + bar.amplitude * Math.sin(equalizerTime + bar.phase);
+                bar.currentHeight = Math.max(barBaseHeight, bar.currentHeight);
+            }
+        }
+
+        function drawEqualizerBars(ctxToUse, canvasToUse, alpha = 1) { // Ajout de ctxToUse, canvasToUse et alpha
+            ctxToUse.save();
+            ctxToUse.globalAlpha = alpha;
+
+            const bottomY = canvasToUse.height;
+
+            for (let i = 0; i < equalizerBars.length; i++) {
+                const bar = equalizerBars[i];
+                const barY = bottomY - bar.currentHeight;
+
+                const colorFactor = bar.currentHeight / barMaxHeight;
+                const barColor = interpolateColor(darkenColor(interpolatedColor, 70), interpolatedColor, colorFactor);
+                
+                ctxToUse.fillStyle = barColor;
+                ctxToUse.fillRect(bar.x, barY, barWidth, bar.currentHeight);
+
+                ctxToUse.save();
+                ctxToUse.globalAlpha = alpha * 0.3; // Reflet encore plus transparent
+                ctxToUse.fillRect(bar.x, bottomY, barWidth, bar.currentHeight);
+                ctxToUse.restore();
+            }
+            ctxToUse.restore(); // Restore globalAlpha
+        }
+
+        let pauseBackgroundAnimationFrameId;
+        let lastPauseFrameTime = 0;
+        const MIN_FRAME_INTERVAL = 1000 / 60;
+
+        function animatePauseBackground(timestamp) {
+            if (!lastPauseFrameTime) lastPauseFrameTime = timestamp;
+            const deltaTime = timestamp - lastPauseFrameTime;
+
+            if (deltaTime > MIN_FRAME_INTERVAL) {
+                updateBackgroundTransition();
+
+                for (let i = 0; i < lightRays.length; i++) {
+                    const ray = lightRays[i];
+                    // Vitesse adaptée au backgroundCanvas
+                    ray.y -= ray.speed * (deltaTime / 16.66) * (backgroundCanvas.height / 600);
+                    if (ray.y < -ray.length) {
+                        ray.y = backgroundCanvas.height;
+                        ray.x = Math.random() * backgroundCanvas.width;
+                        ray.speed = (rayMinSpeed + Math.random() * (rayMaxSpeed - rayMinSpeed)) * (backgroundCanvas.height / 600);
+                        ray.length = (100 + Math.random() * 200) * (backgroundCanvas.width / 700);
+                        ray.width = (5 + Math.random() * 10) * (backgroundCanvas.width / 700);
+                    }
+                }
+                updateEqualizerBars(backgroundCanvas); // Mise à jour des barres du fond
+
+                // Dessin du fond fantomatique sur backgroundCanvas
+                bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+                drawBackground(bgCtx, backgroundCanvas, 0.2); // Alpha 0.2 pour l'effet fantomatique
+                drawEqualizerBars(bgCtx, backgroundCanvas, 0.2); // Alpha 0.2 pour les barres
+
+                // Dessin du jeu principal sur gameCanvas (s'il est en pause et qu'il y a l'UI de pouvoirs)
+                ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height); // Effacer le gameCanvas
+                if (powerSelectionActive) {
+                    // Si la sélection de pouvoir est active, on dessine l'UI par-dessus le gameCanvas
+                    // Le gameCanvas est transparent derrière l'UI de pouvoir
+                    drawPowerSelectionUI();
+                } else {
+                    // Si en pause sans sélection de pouvoir, juste le fond du gameCanvas (peut être vide ou une couleur solide)
+                    // On peut dessiner un fond sombre pour le gameCanvas si on veut un effet de "dim"
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillRect(0,0,gameCanvas.width, gameCanvas.height);
+                }
+
+                lastPauseFrameTime = timestamp;
+            }
+
+            if (isPaused) {
+                pauseBackgroundAnimationFrameId = requestAnimationFrame(animatePauseBackground);
+            }
+        }
+
+        function drawPlayer() {
+            ctx.save();
+
+            const scaledWidth = player.width * playerScale;
+            const scaledHeight = player.height * playerScale;
+            const scaledX = player.x - (scaledWidth - player.width) / 2;
+            const scaledY = player.y - (scaledHeight - player.height) / 2;
+
+            ctx.fillStyle = getBlockColor(player.value);
+            drawRoundedRect(ctx, scaledX, scaledY, scaledWidth, scaledHeight, CORNER_RADIUS * (gameCanvas.width / 700));
+
+            ctx.fillStyle = getBlockTextColor(player.value);
+            ctx.font = `bold ${20 * playerScale * (gameCanvas.width / 700)}px Arial`; /* Texte joueur proportionnel */
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(player.value, scaledX + scaledWidth / 2, scaledY + scaledHeight / 2);
+
+            ctx.restore();
+        }
+
+        function drawPowerVisualEffects() {
+            const scaledWidth = player.width * playerScale;
+            const scaledHeight = player.height * playerScale;
+            const scaledX = player.x - (scaledWidth - player.width) / 2;
+            const scaledY = player.y - (scaledHeight - player.height) / 2;
+            const playerCenterX = scaledX + scaledWidth / 2;
+            const playerCenterY = scaledY + scaledHeight / 2;
+
+            if (isInvulnerable) {
+                const flicker = Math.floor(Date.now() / 100) % 2;
+                if (flicker === 0) {
+                    ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
+                    ctx.beginPath();
+                    ctx.arc(playerCenterX, playerCenterY, scaledWidth / 2 + 15 * (gameCanvas.width / 700), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            if (isSpeedBoostActive) {
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
+                ctx.lineWidth = 3 * (gameCanvas.width / 700);
+                const trailLength = 20 * (gameCanvas.width / 700);
+                
+                ctx.beginPath();
+                ctx.moveTo(playerCenterX, scaledY + scaledHeight);
+                ctx.lineTo(playerCenterX - player.speedX * 0.2, scaledY + scaledHeight + trailLength);
+                ctx.stroke();
+
+                if (player.speedX !== 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(playerCenterX - scaledWidth / 2, playerCenterY);
+                    ctx.lineTo(playerCenterX - scaledWidth / 2 - player.speedX * 0.5, playerCenterY);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(playerCenterX + scaledWidth / 2, playerCenterY);
+                    ctx.lineTo(playerCenterX + scaledWidth / 2 - player.speedX * 0.5, playerCenterY);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function drawObstacles() {
+            obstacles.forEach(obstacle => {
+                ctx.fillStyle = getBlockColor(obstacle.value);
+                drawRoundedRect(ctx, obstacle.x, obstacle.y, obstacle.width, obstacle.height, CORNER_RADIUS * (gameCanvas.width / 700));
+
+                ctx.fillStyle = getBlockTextColor(obstacle.value);
+                ctx.font = `bold ${20 * (gameCanvas.width / 700)}px Arial`; /* Texte obstacle proportionnel */
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(obstacle.value, obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2);
+            });
+        }
+
+        function drawDestroyShot() {
+            if (destroyShot) {
+                const projectileSize = PROJECTILE_SIZE * (gameCanvas.width / 700);
+                ctx.fillStyle = 'rgba(255, 255, 0, 1)';
+                ctx.fillRect(destroyShot.x, destroyShot.y, projectileSize, projectileSize);
+            }
+        }
+
+        function updateDestroyShot() {
+            if (destroyShot) {
+                destroyShot.y -= PROJECTILE_SPEED * (gameCanvas.width / 700);
+
+                for (let i = 0; i < obstacles.length; i++) {
+                    const obstacle = obstacles[i];
+                    const projectileSize = PROJECTILE_SIZE * (gameCanvas.width / 700);
+                    if (destroyShot.x < obstacle.x + obstacle.width &&
+                        destroyShot.x + projectileSize > obstacle.x &&
+                        destroyShot.y < obstacle.y + obstacle.height &&
+                        destroyShot.y + projectileSize > obstacle.y) {
+
+                        createTextParticles(
+                            obstacle.x + obstacle.width / 2,
+                            obstacle.y + obstacle.height / 2,
+                            obstacle.value.toString(),
+                            getBlockColor(obstacle.value)
+                        );
+                        obstacles.splice(i, 1);
+                        destroyShot = null;
+                        break;
+                    }
+                }
+
+                if (destroyShot && destroyShot.y < -PROJECTILE_SIZE * (gameCanvas.width / 700)) {
+                    destroyShot = null;
+                }
+            }
+        }
+
+        function createTextParticles(x, y, value, color) {
+            const baseFontSize = 20 * (gameCanvas.width / 700);
+            const particleSpeedYMax = TEXT_PARTICLE_SPEED_Y_MAX * (gameCanvas.width / 700);
+            const particleSpeedXMax = TEXT_PARTICLE_SPEED_X_MAX * (gameCanvas.width / 700);
+
+            for (let i = 0; i < TEXT_PARTICLE_COUNT; i++) {
+                const speedY = -(0.5 + Math.random() * particleSpeedYMax);
+                const speedX = (Math.random() - 0.5) * 2 * particleSpeedXMax;
+                particles.push({
+                    type: 'text',
+                    x: x + (Math.random() - 0.5) * 10 * (gameCanvas.width / 700),
+                    y: y + (Math.random() - 0.5) * 10 * (gameCanvas.width / 700),
+                    text: value,
+                    font_size: baseFontSize + Math.random() * (10 * (gameCanvas.width / 700)),
+                    speedX: speedX,
+                    speedY: speedY,
+                    color: color,
+                    alpha: 1,
+                    lifetime: TEXT_PARTICLE_LIFETIME,
+                    currentLife: TEXT_PARTICLE_LIFETIME
+                });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.speedX;
+                p.y += p.speedY;
+
+                p.currentLife--;
+                p.alpha = p.currentLife / p.lifetime;
+
+                p.font_size *= 0.99;
+
+                if (p.currentLife <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function drawParticles() {
+            for (let i = 0; i < particles.length; i++) {
+                const p = particles[i];
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.font = `${p.font_size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(p.text, p.x, p.y);
+                ctx.restore();
+            }
+        }
+
+        function updatePlayerScale() {
+            if (playerScale < PLAYER_SCALE_MAX) {
+                playerScale += PLAYER_SCALE_SPEED_UP;
+                if (playerScale > PLAYER_SCALE_MAX) {
+                    playerScale = PLAYER_SCALE_MAX;
+                }
+            } else if (playerScale > 1) {
+                playerScale -= PLAYER_SCALE_SPEED_DOWN;
+                if (playerScale < 1) {
+                    playerScale = 1;
+                }
+            }
+        }
+
+        function updatePlayer() {
+            player.x += player.speedX;
+
+            if (player.x < 0) {
+                player.x = 0;
+            }
+            if (player.x + player.width > gameCanvas.width) {
+                player.x = gameCanvas.width - player.width;
+            }
+        }
+
+        function createObstacle(initialX = null, initialY = -OBSTACLE_FIXED_HEIGHT, value = null) {
+            const randomX = initialX !== null ? initialX : Math.random() * (gameCanvas.width - OBSTACLE_FIXED_WIDTH);
+
+            let blockValue;
+            if (value !== null) {
+                blockValue = value;
+            } else {
+                const playerPower = Math.log2(player.value);
+
+                const minPower = Math.max(1, playerPower - 1);
+                let maxPower = playerPower + 2;
+
+                if (player.value < 16) {
+                    maxPower = playerPower + 1;
+                } else if (player.value < 64) {
+                    maxPower = playerPower + 2;
+                }
+                if (maxPower < minPower) maxPower = minPower;
+
+                blockValue = generatePowerOfTwo(minPower, maxPower);
+            }
+
+            obstacles.push({
+                x: randomX,
+                y: initialY,
+                width: OBSTACLE_FIXED_WIDTH,
+                height: OBSTACLE_FIXED_HEIGHT,
+                fallSpeed: gameSpeed + Math.random() * 1 * (gameCanvas.height / 600), // Vitesse de chute proportionnelle
+                value: blockValue
+            });
+        }
+
+        function updateObstacles() {
+            for (let i = 0; i < obstacles.length; i++) {
+                obstacles[i].y += obstacles[i].fallSpeed;
+            }
+
+            const currentTime = Date.now();
+            if (currentTime - lastObstacleTime > nextObstacleInterval) {
+                createObstacle();
+                lastObstacleTime = currentTime;
+                nextObstacleInterval = Math.random() * (obstacleMaxInterval - obstacleMinInterval) + obstacleMinInterval;
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                if (obstacles[i].y > gameCanvas.height) {
+                    obstacles.splice(i, 1);
+                }
+            }
+        }
+
+        function updateBackgroundTransition() {
+            if (transitioningBackground) {
+                const elapsed = Date.now() - transitionStartTime;
+                let factor = elapsed / TRANSITION_DURATION;
+
+                if (factor >= 1) {
+                    factor = 1;
+                    transitioningBackground = false;
+                    startColor = targetColor;
+                }
+
+                interpolatedColor = interpolateColor(startColor, targetColor, factor);
+            }
+        }
+
+        let animationFrameId;
+
+        function pauseGame() {
+            isPaused = true;
+            pauseButton.textContent = 'Continuer';
+            cancelAnimationFrame(animationFrameId);
+            touchControls.classList.add('hidden-on-power-select'); // Masquer les contrôles tactiles
+            lastPauseFrameTime = 0;
+            pauseBackgroundAnimationFrameId = requestAnimationFrame(animatePauseBackground);
+        }
+
+        function resumeGame() {
+            isPaused = false;
+            pauseButton.textContent = 'Pause';
+            cancelAnimationFrame(pauseBackgroundAnimationFrameId);
+            touchControls.classList.remove('hidden-on-power-select'); // Afficher les contrôles tactiles
+            gameLoop();
+        }
+
+        function checkCollision() {
+            if (isPaused) {
+                return;
+            }
+
+            const playerCollisionRect = {
+                x: player.x - (player.width * playerScale - player.width) / 2,
+                y: player.y - (player.height * playerScale - player.height) / 2,
+                width: player.width * playerScale,
+                height: player.height * playerScale
+            };
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+
+                if (playerCollisionRect.x < obstacle.x + obstacle.width &&
+                    playerCollisionRect.x + playerCollisionRect.width > obstacle.x &&
+                    playerCollisionRect.y < obstacle.y + obstacle.height &&
+                    playerCollisionRect.y + playerCollisionRect.height > obstacle.y) {
+
+                    if (isInvulnerable) {
+                        obstacles.splice(i, 1);
+                        continue;
+                    }
+
+                    if (obstacle.value === player.value) {
+                        player.value *= 2;
+                        score += obstacle.value;
+                        playerValueDisplay.textContent = player.value;
+
+                        createTextParticles(
+                            obstacle.x + obstacle.width / 2,
+                            obstacle.y + obstacle.height / 2,
+                            obstacle.value.toString(),
+                            getBlockTextColor(obstacle.value)
+                        );
+
+                        playerScale = 1.01;
+
+                        obstacles.splice(i, 1);
+
+                        fusionsThisLevel++;
+                        fusionsSinceLastPower++;
+
+                        if (fusionsThisLevel >= fusionsPerLevel) {
+                            currentLevel++;
+                            fusionsThisLevel = 0;
+                            gameSpeed += 0.2 * (gameCanvas.height / 600); // Augmentation de vitesse proportionnelle
+                            
+                            startColor = interpolatedColor;
+                            currentBackgroundColorIndex = (currentBackgroundColorIndex + 1) % BACKGROUND_COLORS.length;
+                            targetColor = BACKGROUND_COLORS[currentBackgroundColorIndex];
+                            transitionStartTime = Date.now();
+                            transitioningBackground = true;
+                        }
+
+                        if (fusionsSinceLastPower >= fusionsForPower) {
+                            fusionsSinceLastPower = 0;
+                            powerSelectionActive = true;
+                            pauseGame();
+                            showPowerSelectionUI();
+                            return;
+                        }
+
+                    } else {
+                        gameOver = true;
+                        restartButton.style.display = 'block';
+                        cancelAnimationFrame(animationFrameId);
+                        cancelAnimationFrame(pauseBackgroundAnimationFrameId); // Arrêter l'animation du fond aussi
+                        return;
+                    }
+                }
+            }
+
+            const obstaclesToProcess = [...obstacles];
+            let obstaclesToRemove = new Set();
+            let newObstaclesToAdd = [];
+
+            for (let i = 0; i < obstaclesToProcess.length; i++) {
+                const obstacleA = obstaclesToProcess[i];
+
+                if (obstaclesToRemove.has(obstacleA)) {
+                    continue;
+                }
+
+                for (let j = i + 1; j < obstaclesToProcess.length; j++) {
+                    const obstacleB = obstaclesToProcess[j];
+
+                    if (obstaclesToRemove.has(obstacleB)) {
+                        continue;
+                    }
+
+                    const distSq = (obstacleA.x - obstacleB.x) ** 2 + (obstacleA.y - obstacleB.y) ** 2;
+                    const minDistanceSq = (OBSTACLE_FIXED_WIDTH * 0.8) ** 2;
+
+                    if (distSq < minDistanceSq || (
+                        obstacleA.x < obstacleB.x + obstacleB.width &&
+                        obstacleA.x + obstacleA.width > obstacleB.x &&
+                        obstacleA.y < obstacleB.y + obstacleB.height &&
+                        obstacleA.y + obstacleB.height > obstacleB.y
+                    )) {
+                        const centerAX = obstacleA.x + obstacleA.width / 2;
+                        const centerAY = obstacleA.y + obstacleA.height / 2;
+                        const centerBX = obstacleB.x + obstacleB.width / 2;
+                        const centerBY = obstacleB.y + obstacleB.height / 2;
+
+                        const collisionCenterX = (centerAX + centerBX) / 2;
+                        const collisionCenterY = (centerAY + centerBY) / 2;
+
+                        const newBlockX = collisionCenterX - OBSTACLE_FIXED_WIDTH / 2;
+                        const newBlockY = collisionCenterY - OBSTACLE_FIXED_HEIGHT / 2;
+
+
+                        if (obstacleA.value === obstacleB.value) {
+                            const newValue = obstacleA.value * 2;
+                            score += newValue;
+
+                            newObstaclesToAdd.push({
+                                x: newBlockX,
+                                y: newBlockY,
+                                value: newValue
+                            });
+
+                            createTextParticles(collisionCenterX, collisionCenterY, newValue.toString(), getBlockTextColor(newValue));
+
+                            obstaclesToRemove.add(obstacleA);
+                                obstaclesToRemove.add(obstacleB);
+
+                            break;
+                        } else {
+                            let biggerBlock, smallerBlock;
+
+                            if (obstacleA.value > obstacleB.value) {
+                                biggerBlock = obstacleA;
+                                smallerBlock = obstacleB;
+                            } else {
+                                biggerBlock = obstacleB;
+                                smallerBlock = obstacleA;
+                            }
+
+                            const newValue = biggerBlock.value / 2;
+
+                            if (newValue < 2) {
+                                obstaclesToRemove.add(obstacleA);
+                                obstaclesToRemove.add(obstacleB);
+                                break;
+                            }
+
+                            newObstaclesToAdd.push({
+                                x: newBlockX,
+                                y: newBlockY,
+                                value: newValue
+                            });
+
+                            createTextParticles(collisionCenterX, collisionCenterY, `-${smallerBlock.value}`, '#FF4500');
+                            createTextParticles(collisionCenterX, collisionCenterY, newValue.toString(), getBlockTextColor(newValue));
+
+                            obstaclesToRemove.add(obstacleA);
+                            obstaclesToRemove.add(obstacleB);
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+            obstacles = obstacles.filter(obstacle => !obstaclesToRemove.has(obstacle));
+
+            newObstaclesToAdd.forEach(newBlockData => {
+                createObstacle(newBlockData.x, newBlockData.y, newBlockData.value);
+            });
+        }
+
+
+        function updatePowerTimers() {
+            const currentTime = Date.now();
+
+            if (isInvulnerable && currentTime > invulnerabilityEndTime) {
+                isInvulnerable = false;
+            }
+
+            if (isSpeedBoostActive && currentTime > speedBoostEndTime) {
+                isSpeedBoostActive = false;
+                player.playerSpeed = player.basePlayerSpeed;
+            }
+
+            if (unlockedPowers['Destruction']) {
+                destroyPowerButton.classList.remove('disabled');
+                const timeSinceLastShot = currentTime - destroyLastShotTime;
+                if (destroyCharges === 0 && timeSinceLastShot < DESTROY_COOLDOWN_BETWEEN_SHOTS && destroyLastShotTime !== 0) {
+                     destroyPowerButton.classList.add('disabled');
+                     destroyPowerButton.classList.remove('active');
+                     destroyPowerButton.classList.add('cooldown');
+                } else if (destroyCharges === 0) {
+                    destroyPowerButton.classList.add('disabled');
+                    destroyPowerButton.classList.remove('active');
+                    destroyPowerButton.classList.remove('cooldown');
+                } else if (timeSinceLastShot < DESTROY_COOLDOWN_BETWEEN_SHOTS) {
+                    destroyPowerButton.classList.add('cooldown');
+                    destroyPowerButton.classList.remove('active');
+                } else {
+                    destroyPowerButton.classList.remove('cooldown');
+                    destroyPowerButton.classList.add('active');
+                }
+            } else {
+                 destroyPowerButton.classList.add('disabled');
+                 destroyPowerButton.classList.remove('cooldown');
+                 destroyPowerButton.classList.remove('active');
+            }
+        }
+
+
+        function drawPowerFeedbacks() {
+            const currentTime = Date.now();
+            const scaleFactor = gameCanvas.width / 700;
+            
+            const feedbackX = player.x + player.width / 2 + 70 * scaleFactor;
+            let feedbackY = player.y - 50 * scaleFactor;
+
+            ctx.save();
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.font = `bold ${20 * scaleFactor}px Arial`;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+
+            let activeFeedbacks = [];
+
+            if (isInvulnerable) {
+                const timeLeft = Math.ceil((invulnerabilityEndTime - currentTime) / 1000);
+                activeFeedbacks.push({ name: "Invulnérabilité", text: `${timeLeft}s`, icon: powerIconCodes["Invulnérabilité"] });
+            }
+
+            if (isSpeedBoostActive) {
+                const timeLeft = Math.ceil((speedBoostEndTime - currentTime) / 1000);
+                activeFeedbacks.push({ name: "Flash", text: `${timeLeft}s`, icon: powerIconCodes["Flash"] });
+            }
+
+            if (unlockedPowers['Destruction']) {
+                if (destroyCharges > 0 && currentTime - destroyLastShotTime < DESTROY_COOLDOWN_BETWEEN_SHOTS && destroyLastShotTime !== 0) {
+                    const cooldownLeft = Math.ceil((DESTROY_COOLDOWN_BETWEEN_SHOTS - (currentTime - destroyLastShotTime)) / 1000);
+                    activeFeedbacks.push({ name: "Destruction", text: `CD: ${cooldownLeft}s`, icon: powerIconCodes["Destruction"] });
+                } else if (destroyCharges > 0) {
+                     activeFeedbacks.push({ name: "Destruction", text: `Charges: ${destroyCharges}`, icon: powerIconCodes["Destruction"] });
+                } else if (destroyCharges === 0 && destroyLastShotTime !== 0) {
+                    activeFeedbacks.push({ name: "Destruction", text: `Recharge requise`, icon: powerIconCodes["Destruction"] });
+                }
+            }
+
+            let currentOffset = 0;
+            const itemSpacing = 15 * scaleFactor;
+            const iconTextSpacing = 5 * scaleFactor;
+
+            activeFeedbacks.forEach(feedback => {
+                ctx.save();
+                ctx.globalAlpha = 0.7;
+
+                if (feedback.icon) {
+                    ctx.font = `900 ${20 * scaleFactor}px "${feedback.icon.font}"`;
+                    ctx.fillText(feedback.icon.char, feedbackX, feedbackY + currentOffset);
+                    currentOffset += 25 * scaleFactor;
+                }
+
+                ctx.font = `bold ${16 * scaleFactor}px Arial`;
+                ctx.fillText(feedback.text, feedbackX, feedbackY + currentOffset);
+
+                currentOffset += 20 * scaleFactor;
+                ctx.restore();
+            });
+
+            ctx.restore();
+        }
+
+        function updateGameStatus() {
+            if (!gameOver) {
+                scoreDisplay.textContent = score;
+                levelDisplay.textContent = currentLevel;
+                pauseButton.style.display = 'block';
+                // La visibilité de fullscreenButton est gérée par checkDisplayMode et les événements fullscreenchange
+            } else {
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('numericEvaderHighScore', highScore);
+                }
+                pauseButton.style.display = 'none';
+                fullscreenButton.style.display = 'none'; // Masquer le bouton plein écran au Game Over
+                touchControls.classList.add('hidden-on-power-select'); // Masquer les contrôles tactiles au Game Over
+            }
+            highScoreDisplay.textContent = highScore;
+        }
+
+
+        function gameLoop() {
+            if (gameOver) {
+                return;
+            }
+
+            if (!isPaused) {
+                // Update et draw du fond "fantomatique" sur backgroundCanvas
+                updateBackgroundTransition();
+                for (let i = 0; i < lightRays.length; i++) {
+                    const ray = lightRays[i];
+                    ray.y -= ray.speed;
+                    if (ray.y < -ray.length) {
+                        ray.y = backgroundCanvas.height;
+                        ray.x = Math.random() * backgroundCanvas.width;
+                        ray.speed = (rayMinSpeed + Math.random() * (rayMaxSpeed - rayMinSpeed)) * (backgroundCanvas.height / 600);
+                        ray.length = (100 + Math.random() * 200) * (backgroundCanvas.width / 700);
+                        ray.width = (5 + Math.random() * 10) * (backgroundCanvas.width / 700);
+                    }
+                }
+                updateEqualizerBars(backgroundCanvas); // Mise à jour des barres du fond
+
+                bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+                drawBackground(bgCtx, backgroundCanvas, 0.2); // Alpha 0.2 pour l'effet fantomatique
+                drawEqualizerBars(bgCtx, backgroundCanvas, 0.2); // Alpha 0.2 pour les barres
+
+                // Clear et draw du jeu principal sur gameCanvas
+                ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+                drawBackground(ctx, gameCanvas, 1); // Alpha 1 pour le jeu principal
+                drawEqualizerBars(ctx, gameCanvas, 1); // Alpha 1 pour les barres
+
+                updatePlayer();
+                updateObstacles();
+                updateDestroyShot();
+                checkCollision();
+                updateGameStatus();
+                updateParticles();
+                updatePlayerScale();
+                updatePowerTimers();
+
+                drawPlayer();
+                drawPowerVisualEffects();
+                drawObstacles();
+                drawDestroyShot();
+                drawParticles();
+                drawPowerFeedbacks();
+            }
+
+            if (!isPaused) {
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // --- Empêcher le menu contextuel du clic droit (utile sur desktop) ---
+        gameCanvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+
+
+        // --- Événements Clavier (pour tests sur PC) ---
+        document.addEventListener('keydown', (e) => {
+            if (gameOver || isPaused) {
+                return;
+            }
+            if (e.key === 'ArrowLeft' || e.key === 'q') {
+                player.speedX = -player.playerSpeed;
+            } else if (e.key === 'ArrowRight' || e.key === 'd') {
+                player.speedX = player.playerSpeed;
+            } else if (e.key === ' ' && unlockedPowers['Destruction']) {
+                const currentTime = Date.now();
+                if (destroyCharges > 0 && currentTime - destroyLastShotTime >= DESTROY_COOLDOWN_BETWEEN_SHOTS) {
+                    destroyShot = {
+                        x: player.x + player.width / 2 - (PROJECTILE_SIZE * (gameCanvas.width / 700)) / 2,
+                        y: player.y
+                    };
+                    destroyCharges--;
+                    destroyLastShotTime = currentTime;
+                }
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'q' || e.key === 'd') {
+                player.speedX = 0;
+            }
+        });
+
+        // --- Contrôles tactiles ---
+        touchLeftButton.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Empêche le défilement et le zoom
+            if (gameOver || isPaused) return;
+            player.speedX = -player.playerSpeed;
+        }, { passive: false }); // { passive: false } pour permettre preventDefault
+
+        touchLeftButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (gameOver || isPaused) return;
+            player.speedX = 0;
+        });
+
+        touchRightButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameOver || isPaused) return;
+            player.speedX = player.playerSpeed;
+        }, { passive: false }); // { passive: false } pour permettre preventDefault
+
+        touchRightButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (gameOver || isPaused) return;
+            player.speedX = 0;
+        });
+
+        // Gestion du bouton destruction (toujours utilisable même si les autres contrôles sont masqués par le CSS)
+        destroyPowerButton.addEventListener('click', () => {
+             if (gameOver || isPaused || !unlockedPowers['Destruction']) return;
+            const currentTime = Date.now();
+            if (destroyCharges > 0 && currentTime - destroyLastShotTime >= DESTROY_COOLDOWN_BETWEEN_SHOTS) {
+                destroyShot = {
+                    x: player.x + player.width / 2 - (PROJECTILE_SIZE * (gameCanvas.width / 700)) / 2,
+                    y: player.y
+                };
+                destroyCharges--;
+                destroyLastShotTime = currentTime;
+            }
+        });
+
+        pauseButton.addEventListener('click', () => {
+            if (gameOver || powerSelectionActive) {
+                return;
+            }
+            if (isPaused) {
+                resumeGame();
+            } else {
+                pauseGame();
+            }
+        });
+
+        // Bouton Plein écran (visible seulement si non PWA)
+        fullscreenButton.addEventListener('click', () => {
+            const elem = document.documentElement; // ou document.body ou game-container
+
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(err => {
+                    console.error(`Erreur de sortie du mode plein écran: ${err.message}`);
+                });
+            } else {
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.webkitRequestFullscreen) { /* Safari */
+                    elem.webkitRequestFullscreen();
+                } else if (elem.msRequestFullscreen) { /* IE11 */
+                    elem.msRequestFullscreen();
+                }
+            }
+        });
+
+        // Écouteur pour le changement d'état du plein écran (pour masquer/afficher le bouton si nécessaire)
+        document.addEventListener('fullscreenchange', checkDisplayMode);
+        document.addEventListener('webkitfullscreenchange', checkDisplayMode);
+        document.addEventListener('msfullscreenchange', checkDisplayMode);
+
+
+        restartButton.addEventListener('click', () => {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            if (pauseBackgroundAnimationFrameId) {
+                cancelAnimationFrame(pauseBackgroundAnimationFrameId);
+            }
+
+            player = {
+                x: gameCanvas.width / 2 - 25 * (gameCanvas.width / 700),
+                y: gameCanvas.height - 70 * (gameCanvas.height / 600),
+                width: 50 * (gameCanvas.width / 700),
+                height: 50 * (gameCanvas.width / 700),
+                speedX: 0,
+                basePlayerSpeed: 7 * (gameCanvas.width / 700),
+                playerSpeed: 7 * (gameCanvas.width / 700),
+                value: 2
+            };
+            obstacles = [];
+            score = 0;
+            gameSpeed = 2;
+            gameOver = false;
+            isPaused = false;
+            lastObstacleTime = 0;
+            nextObstacleInterval = Math.random() * (obstacleMaxInterval - obstacleMinInterval) + obstacleMinInterval;
+
+            currentLevel = 1;
+            fusionsThisLevel = 0;
+            fusionsSinceLastPower = 0;
+            particles = [];
+            playerScale = 1;
+
+            powerSelectionActive = false;
+            availablePowers = [];
+            powerOptions = [];
+            powerSelectionAnimationFrame = 0;
+            glowAlpha = 0;
+            glowDirection = 1;
+
+            unlockedPowers = {
+                'Invulnérabilité': false,
+                'Flash': false,
+                'Destruction': false
+            };
+            isInvulnerable = false;
+            invulnerabilityEndTime = 0;
+            isSpeedBoostActive = false;
+            speedBoostEndTime = 0;
+            destroyShot = null;
+            destroyLastShotTime = 0;
+            destroyCharges = 0;
+
+            currentBackgroundColorIndex = 0;
+            transitioningBackground = false;
+            startColor = BACKGROUND_COLORS[0];
+            targetColor = BACKGROUND_COLORS[0];
+            interpolatedColor = BACKGROUND_COLORS[0];
+
+            initializeBackgroundElements(); // Réinitialiser les éléments pour les deux canvases
+            equalizerTime = 0;
+
+            scoreDisplay.textContent = '0';
+            playerValueDisplay.textContent = player.value;
+            levelDisplay.textContent = currentLevel;
+            restartButton.style.display = 'none';
+            pauseButton.textContent = 'Pause';
+            pauseButton.style.display = 'block';
+            checkDisplayMode(); // S'assurer que le bouton plein écran est géré correctement au redémarrage
+            touchControls.classList.remove('hidden-on-power-select'); // Afficher les contrôles tactiles au redémarrage
+
+            updatePowerTimers();
+
+            gameLoop();
+        });
+
+        highScoreDisplay.textContent = highScore;
+        playerValueDisplay.textContent = player.value;
+        levelDisplay.textContent = currentLevel;
+
+        const POWER_TYPES_SELECTION = [
+            {
+                name: "Invulnérabilité",
+                description: "Devient invulnérable aux collisions pendant un court instant.",
+                anecdote: "Le bouclier mystique, une bulle qui rigole quand les blocs vous frappent ! Ils glissent sans vous faire mal. C'est comme une savonnette pour les nombres !",
+                isActive: () => isInvulnerable,
+                isUsable: () => !isInvulnerable
+            },
+            {
+                name: "Flash",
+                description: "Augmente drastiquement votre vitesse de déplacement temporairement.",
+                anecdote: "Avec ce pouvoir, vous allez si vite que même la lumière ne vous suit pas ! Attention à ne pas laisser votre ombre derrière vous.",
+                isActive: () => isSpeedBoostActive,
+                isUsable: () => !isSpeedBoostActive
+            },
+            {
+                name: "Destruction",
+                description: "Lance un projectile qui détruit le premier bloc qu'il touche (2 charges).",
+                anecdote: "Un projectile magique qui fait disparaître les nombres comme par magie ! Mais ne vous inquiétez pas, personne ne va faire de crise existentielle.",
+                isActive: () => destroyCharges > 0,
+                isUsable: () => destroyCharges < MAX_DESTROY_CHARGES || (destroyCharges > 0 && (Date.now() - destroyLastShotTime) >= DESTROY_COOLDOWN_BETWEEN_SHOTS)
+            }
+        ];
+
+
+        function getRandomPowers(numOptions) {
+            let optionsToPropose = [];
+
+            const unblockedPowers = POWER_TYPES_SELECTION.filter(power => !unlockedPowers[power.name]);
+            if (unblockedPowers.length > 0) {
+                const shuffledUnblocked = [...unblockedPowers].sort(() => 0.5 - Math.random());
+                optionsToPropose.push(shuffledUnblocked[0]);
+            }
+
+            const potentialReactivations = POWER_TYPES_SELECTION.filter(power =>
+                unlockedPowers[power.name] && power.isUsable() && !optionsToPropose.includes(power)
+            );
+
+            const shuffledReactivations = [...potentialReactivations].sort(() => 0.5 - Math.random());
+
+            for (let i = 0; i < shuffledReactivations.length && optionsToPropose.length < numOptions; i++) {
+                optionsToPropose.push(shuffledReactivations[i]);
+            }
+
+            if (optionsToPropose.length < numOptions) {
+                const allPowersShuffled = [...POWER_TYPES_SELECTION].sort(() => 0.5 - Math.random());
+                for (let i = 0; i < allPowersShuffled.length && optionsToPropose.length < numOptions; i++) {
+                    if (!optionsToPropose.includes(allPowersShuffled[i])) {
+                        optionsToPropose.push(allPowersShuffled[i]);
+                    }
+                }
+            }
+
+            return optionsToPropose;
+        }
+
+
+        function showPowerSelectionUI() {
+            availablePowers = getRandomPowers(NUM_POWER_OPTIONS);
+
+            powerOptions = [];
+
+            const panelWidth = POWER_OPTION_WIDTH;
+            const totalHeightOfOptions = (POWER_OPTION_HEIGHT + POWER_OPTION_MARGIN) * NUM_POWER_OPTIONS - POWER_OPTION_MARGIN;
+            
+            let startY = (gameCanvas.height / 2) - (totalHeightOfOptions / 2); 
+
+            availablePowers.forEach((power, index) => {
+                const optionX = gameCanvas.width / 2 - (panelWidth / 2);
+                const optionY = startY + (POWER_OPTION_HEIGHT + POWER_OPTION_MARGIN) * index;
+
+                powerOptions.push({
+                    x: optionX,
+                    y: optionY,
+                    width: panelWidth,
+                    height: POWER_OPTION_HEIGHT,
+                    power: power,
+                    hover: false,
+                    currentScale: 1,
+                    glowAlpha: 0,
+                    iconData: powerIconCodes[power.name] || { char: '\uf128', font: 'Font Awesome 6 Free', class: 'fas' },
+                    stickmanAnimFrame: 0,
+                    stickmanAnimDirection: 1
+                });
+            });
+
+            powerSelectionAnimationFrame = 0;
+            glowAlpha = 0;
+            glowDirection = 1;
+
+            stickmanContainer.style.opacity = 0;
+            stickmanDialogue.textContent = "";
+            touchControls.classList.add('hidden-on-power-select'); // Masquer les contrôles tactiles
+        }
+
+        let stickmanFrame = 0;
+        const STICKMAN_ANIM_SPEED = 0.05;
+
+        function drawStickman(ctxToUse, x, y, frame) { // Prend ctxToUse en param
+            const scaleFactor = stickmanBody.width / 150; // Base de 150 pour le stickman
+            ctxToUse.strokeStyle = 'black';
+            ctxToUse.lineWidth = 3 * scaleFactor;
+            ctxToUse.lineCap = 'round';
+
+            ctxToUse.beginPath();
+            ctxToUse.moveTo(x, y - 50 * scaleFactor);
+            ctxToUse.lineTo(x, y - 10 * scaleFactor);
+            ctxToUse.stroke();
+
+            ctxToUse.beginPath();
+            ctxToUse.arc(x, y - 65 * scaleFactor, 15 * scaleFactor, 0, Math.PI * 2);
+            ctxToUse.stroke();
+
+            const armAngle = Math.sin(frame * 0.1) * 0.3;
+            ctxToUse.beginPath();
+            ctxToUse.moveTo(x, y - 45 * scaleFactor);
+            ctxToUse.lineTo(x - 20 * scaleFactor * Math.cos(armAngle), y - 45 * scaleFactor + 20 * scaleFactor * Math.sin(armAngle));
+            ctxToUse.moveTo(x, y - 45 * scaleFactor);
+            ctxToUse.lineTo(x + 20 * scaleFactor * Math.cos(armAngle), y - 45 * scaleFactor + 20 * scaleFactor * Math.sin(armAngle));
+            ctxToUse.stroke();
+
+            const legAngle = Math.sin(frame * 0.1 + Math.PI / 2) * 0.2;
+            ctxToUse.beginPath();
+            ctxToUse.moveTo(x, y - 10 * scaleFactor);
+            ctxToUse.lineTo(x - 15 * scaleFactor * Math.cos(legAngle), y + 20 * scaleFactor);
+            ctxToUse.moveTo(x, y - 10 * scaleFactor);
+            ctxToUse.lineTo(x + 15 * scaleFactor * Math.cos(legAngle), y + 20 * scaleFactor);
+            ctxToUse.stroke();
+        }
+
+
+        function drawPowerSelectionUI() {
+            const scaleFactor = gameCanvas.width / 700; // Facteur d'échelle basé sur la largeur du gameCanvas
+
+            const panelWidth = POWER_OPTION_WIDTH + (60 * scaleFactor);
+            const panelHeight = (POWER_OPTION_HEIGHT + POWER_OPTION_MARGIN) * NUM_POWER_OPTIONS + (80 * scaleFactor);
+            
+            const panelX = (gameCanvas.width - panelWidth) / 2;
+            const firstOptionY = powerOptions.length > 0 ? powerOptions[0].y : 0;
+            const panelY = firstOptionY - (50 * scaleFactor);
+
+            ctx.fillStyle = '#1a1a2a';
+            drawRoundedRect(ctx, panelX, panelY, panelWidth, panelHeight, 15 * scaleFactor);
+            ctx.strokeStyle = '#00FFFF';
+            ctx.lineWidth = 3 * scaleFactor;
+            ctx.stroke();
+
+            ctx.fillStyle = '#00FFFF';
+            ctx.font = `bold ${36 * scaleFactor}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText('Choisissez votre Pouvoir !', gameCanvas.width / 2, panelY + (20 * scaleFactor));
+
+            powerSelectionAnimationFrame += POWER_ANIM_SPEED;
+            const animPulse = Math.sin(powerSelectionAnimationFrame * 0.1) * (5 * scaleFactor);
+
+            glowAlpha += glowDirection * CARD_HOVER_GLOW_SPEED;
+            if (glowAlpha > CARD_HOVER_GLOW_MAX_ALPHA || glowAlpha < 0) {
+                glowDirection *= -1;
+                glowAlpha = Math.max(0, Math.min(CARD_HOVER_GLOW_MAX_ALPHA, glowAlpha));
+            }
+
+            let hoveredOption = null;
+
+            powerOptions.forEach((option) => {
+                const targetScale = option.hover ? CARD_HOVER_SCALE_MAX : 1;
+                option.currentScale += (targetScale - option.currentScale) * 0.1;
+
+                const scaledWidth = option.width * option.currentScale;
+                const scaledHeight = option.height * option.currentScale;
+                const scaledX = option.x - (scaledWidth - option.width) / 2;
+                const scaledY = option.y + animPulse - (scaledHeight - option.height) / 2;
+
+                ctx.save();
+
+                if (option.hover) {
+                    ctx.shadowBlur = 25 * scaleFactor;
+                    ctx.shadowColor = `rgba(0, 255, 255, ${glowAlpha})`;
+                    hoveredOption = option;
+                }
+
+                ctx.fillStyle = option.hover ? '#004A8F' : '#007BFF';
+                drawRoundedRect(ctx, scaledX, scaledY, scaledWidth, scaledHeight, 10 * scaleFactor);
+
+                ctx.strokeStyle = '#00BFFF';
+                ctx.lineWidth = 2 * option.currentScale * scaleFactor;
+                drawRoundedRect(ctx, scaledX + 2 * scaleFactor, scaledY + 2 * scaleFactor, scaledWidth - 4 * scaleFactor, scaledHeight - 4 * scaleFactor, 8 * scaleFactor);
+
+                ctx.strokeStyle = '#00FFFF';
+                ctx.lineWidth = 2 * option.currentScale * scaleFactor;
+                ctx.stroke();
+
+                ctx.restore();
+
+                if (option.iconData) {
+                    ctx.save();
+                    ctx.fillStyle = 'white';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+
+                    const iconSize = 60 * option.currentScale * scaleFactor;
+                    ctx.font = `900 ${iconSize}px "${option.iconData.font}"`;
+
+                    ctx.fillText(
+                        option.iconData.char,
+                        scaledX + scaledWidth / 2,
+                        scaledY + scaledHeight / 2 - (30 * option.currentScale * scaleFactor)
+                    );
+                    ctx.restore();
+                }
+
+                ctx.fillStyle = 'white';
+                ctx.font = `bold ${24 * option.currentScale * scaleFactor}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(option.power.name, scaledX + scaledWidth / 2, scaledY + scaledHeight / 2 + (10 * option.currentScale * scaleFactor));
+
+                ctx.font = `${18 * option.currentScale * scaleFactor}px Arial`;
+                ctx.fillStyle = '#DDDDDD';
+                ctx.fillText(option.power.description, scaledX + scaledWidth / 2, scaledY + scaledHeight * 3 / 4 + (15 * option.currentScale * scaleFactor));
+            });
+
+            if (hoveredOption) {
+                stickmanContainer.style.opacity = 1;
+                stickmanDialogue.textContent = hoveredOption.power.anecdote;
+
+                // Positionner le conteneur du stickman en bas du panneau de sélection
+                const stickmanHeight = stickmanContainer.offsetHeight;
+                stickmanContainer.style.left = `${gameCanvas.width / 2}px`;
+                stickmanContainer.style.top = `${panelY + panelHeight + 10 * scaleFactor}px`; // Juste en dessous du panneau
+                stickmanContainer.style.transform = `translateX(-50%)`; // Centrer le conteneur
+
+                stickmanCtx.clearRect(0, 0, stickmanBody.width, stickmanBody.height);
+                stickmanFrame += STICKMAN_ANIM_SPEED;
+                drawStickman(stickmanCtx, stickmanBody.width / 2, stickmanBody.height - (20 * scaleFactor), stickmanFrame);
+
+            } else {
+                stickmanContainer.style.opacity = 0;
+                stickmanDialogue.textContent = "";
+            }
+
+            gameCanvas.style.cursor = 'default'; // Cursor pour le gameCanvas
+            powerOptions.forEach(option => {
+                if (option.hover) {
+                    gameCanvas.style.cursor = 'pointer';
+                }
+            });
+        }
+
+
+        function selectPower(selectedIndex) {
+            const chosenPower = availablePowers[selectedIndex];
+
+            unlockedPowers[chosenPower.name] = true;
+
+            if (chosenPower.name === "Invulnérabilité") {
+                isInvulnerable = true;
+                invulnerabilityEndTime = Date.now() + INVULNERABILITY_DURATION;
+            } else if (chosenPower.name === "Flash") {
+                isSpeedBoostActive = true;
+                speedBoostEndTime = Date.now() + SPEED_BOOST_DURATION;
+                player.playerSpeed = player.basePlayerSpeed * SPEED_BOOST_FACTOR;
+            } else if (chosenPower.name === "Destruction") {
+                destroyCharges = MAX_DESTROY_CHARGES;
+                destroyLastShotTime = 0;
+            }
+
+            powerSelectionActive = false;
+            powerOptions.forEach(option => option.hover = false);
+            stickmanContainer.style.opacity = 0;
+            resumeGame();
+            touchControls.classList.remove('hidden-on-power-select'); // Afficher les contrôles tactiles
+        }
+
+        // --- Gestion des événements tactiles pour la sélection de pouvoir ---
+        gameCanvas.addEventListener('mousemove', (event) => {
+            if (powerSelectionActive && isPaused) {
+                const rect = gameCanvas.getBoundingClientRect();
+                const mouseX = event.clientX - rect.left;
+                const mouseY = event.clientY - rect.top;
+
+                let hoveredOnOption = false;
+                powerOptions.forEach(option => {
+                    const scaledWidth = option.width * option.currentScale;
+                    const scaledHeight = option.height * option.currentScale;
+                    const scaledX = option.x - (scaledWidth - option.width) / 2;
+                    const scaledY = option.y + Math.sin(powerSelectionAnimationFrame * 0.1) * (5 * (gameCanvas.width / 700)) - (scaledHeight - option.height) / 2;
+
+                    if (mouseX > scaledX && mouseX < scaledX + scaledWidth &&
+                        mouseY > scaledY && mouseY < scaledY + scaledHeight) {
+                        option.hover = true;
+                        hoveredOnOption = true;
+                    } else {
+                        option.hover = false;
+                    }
+                });
+                gameCanvas.style.cursor = hoveredOnOption ? 'pointer' : 'default';
+            } else {
+                gameCanvas.style.cursor = 'default';
+            }
+        });
+
+        gameCanvas.addEventListener('click', (event) => {
+            if (powerSelectionActive && isPaused) {
+                const rect = gameCanvas.getBoundingClientRect();
+                const mouseX = event.clientX - rect.left;
+                const mouseY = event.clientY - rect.top;
+
+                powerOptions.forEach((option, index) => {
+                    const scaledWidth = option.width * option.currentScale;
+                    const scaledHeight = option.height * option.currentScale;
+                    const scaledX = option.x - (scaledWidth - option.width) / 2;
+                    const scaledY = option.y + Math.sin(powerSelectionAnimationFrame * 0.1) * (5 * (gameCanvas.width / 700)) - (scaledHeight - option.height) / 2;
+
+                    if (mouseX > scaledX && mouseX < scaledX + scaledWidth &&
+                        mouseY > scaledY && mouseY < scaledY + scaledHeight) {
+                        selectPower(index);
+                    }
+                });
+            }
+        });
+
+        gameCanvas.addEventListener('touchstart', (event) => {
+            if (powerSelectionActive && isPaused) {
+                event.preventDefault(); // Empêche le défilement/zoom
+                const rect = gameCanvas.getBoundingClientRect();
+                const touch = event.touches[0];
+                const touchX = touch.clientX - rect.left;
+                const touchY = touch.clientY - rect.top;
+
+                powerOptions.forEach((option, index) => {
+                    const scaledWidth = option.width * option.currentScale;
+                    const scaledHeight = option.height * option.currentScale;
+                    const scaledX = option.x - (scaledWidth - option.width) / 2;
+                    const scaledY = option.y + Math.sin(powerSelectionAnimationFrame * 0.1) * (5 * (gameCanvas.width / 700)) - (scaledHeight - option.height) / 2;
+
+                    if (touchX > scaledX && touchX < scaledX + scaledWidth &&
+                        touchY > scaledY && touchY < scaledY + scaledHeight) {
+                        selectPower(index);
+                    }
+                });
+            }
+        }, { passive: false }); // { passive: false } pour permettre preventDefault
+
+        // Initialise le mini-canvas du stickman
+        stickmanBody.width = 150;
+        stickmanBody.height = 150;
+        stickmanBody.width = 100 * (gameCanvas.width / 700); // Taille plus petite pour le mobile, proportionnelle
+        stickmanBody.height = 100 * (gameCanvas.width / 700);
+        stickmanCtx.clearRect(0, 0, stickmanBody.width, stickmanBody.height);
+        drawStickman(stickmanCtx, stickmanBody.width / 2, stickmanBody.height - (20 * (gameCanvas.width / 700)), stickmanFrame); // Dessiner une fois au démarrage
+
+        // Enregistrement du Service Worker (pour la PWA)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker enregistré avec succès:', registration);
+                    })
+                    .catch(error => {
+                        console.log('Échec de l\'enregistrement du Service Worker:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
