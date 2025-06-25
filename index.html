@@ -228,20 +228,25 @@
             100% { transform: translateY(-3px); }
         }
 
-        /* Contrôles tactiles */
+        /* --- MODIFICATIONS POUR LES CONTRÔLES TACTILES --- */
         #touch-controls {
-            /* Utilisation de env() pour les safe areas */
-            bottom: max(1vh, env(safe-area-inset-bottom));
-            width: calc(98% - env(safe-area-inset-left) - env(safe-area-inset-right)); /* Ajuster la largeur */
-            left: max(1vw, env(safe-area-inset-left)); /* Décalage pour aligner avec le reste */
-            transform: translateX(calc(-50% + max(1vw, env(safe-area-inset-left)))); /* Ajuster pour le centrage si left n'est pas 0 */
+            position: absolute;
+            bottom: max(2vh, env(safe-area-inset-bottom)); /* Un peu plus haut du bord */
+            left: 50%;
+            transform: translateX(-50%);
+            width: auto; /* Largeur automatique basée sur le contenu */
             display: flex;
-            justify-content: space-between;
-            padding: 1vh 0;
+            justify-content: center; /* Centrer les boutons */
+            gap: 20px; /* Espace entre les boutons */
+            padding: 1vh 2vw;
+            background-color: rgba(0, 0, 0, 0.4); /* Fond pour la visibilité */
+            border-radius: 15px; /* Bords arrondis */
             box-sizing: border-box;
-            pointer-events: auto; /* Doit être auto pour être cliquable */
+            pointer-events: auto;
             opacity: 1;
+            z-index: 100;
         }
+
         .touch-button {
             background-color: rgba(0, 0, 0, 0.6);
             color: white;
@@ -250,12 +255,14 @@
             border: none;
             border-radius: 10px;
             cursor: pointer;
-            flex-grow: 1;
-            margin: 0 1vw;
+            flex-grow: 0; /* Empêche les boutons de s'étirer */
+            margin: 0; /* Supprime les marges extérieures */
             pointer-events: auto;
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
         }
+        /* --- FIN DES MODIFICATIONS --- */
+
         .touch-button:active {
             background-color: rgba(0, 0, 0, 0.8);
         }
@@ -286,7 +293,8 @@
     </style>
 </head>
 <body>
-    <canvas id="backgroundCanvas"></canvas> <div id="game-container">
+    <canvas id="backgroundCanvas"></canvas>
+    <div id="game-container">
         <div id="game-info">
             Score : <span id="score">0</span> | Meilleur : <span id="highScoreDisplay">0</span><br>
             Mon nombre : <span id="player-value-display">2</span> | Niveau : <span id="level-display">1</span>
@@ -658,7 +666,7 @@
                 const ray = lightRays[i];
                 ctxToUse.save();
                 const rayColor = interpolatedColor;
-                ctxToUse.fillStyle = `rgba(${parseInt(rayColor.slice(1,3), 16)}, ${parseInt(rayColor.slice(3,5), 16)}, ${parseInt(rayColor.slice(5,7), 16)}, ${0.2 + Math.sin(ray.offset + equalizerTime * 0.2) * 0.1})`;
+                ctxToUse.fillStyle = `rgba(${parseInt(rayColor.slice(1,3), 16)}, ${parseInt(rayColor.slice(3,5), 16)}, ${parseInt(rayColor.slice(5,7), 16)}, ${0.2 + Math.sin(ray.offset + equalizerTime * 0.1) * 0.1})`;
                 
                 const currentWidth = ray.width + Math.sin(ray.offset + equalizerTime * 0.1) * (ray.width * 0.5);
                 ctxToUse.fillRect(ray.x - currentWidth / 2, ray.y, currentWidth, ray.length);
@@ -999,931 +1007,318 @@
             if (transitioningBackground) {
                 const elapsed = Date.now() - transitionStartTime;
                 let factor = elapsed / TRANSITION_DURATION;
-
                 if (factor >= 1) {
                     factor = 1;
                     transitioningBackground = false;
                     startColor = targetColor;
                 }
-
                 interpolatedColor = interpolateColor(startColor, targetColor, factor);
             }
         }
 
-        let animationFrameId;
-
-        function pauseGame() {
-            isPaused = true;
-            pauseButton.textContent = 'Continuer';
-            cancelAnimationFrame(animationFrameId);
-            touchControls.classList.add('hidden-on-power-select'); // Masquer les contrôles tactiles
-            lastPauseFrameTime = 0;
-            pauseBackgroundAnimationFrameId = requestAnimationFrame(animatePauseBackground);
-        }
-
-        function resumeGame() {
-            isPaused = false;
-            pauseButton.textContent = 'Pause';
-            cancelAnimationFrame(pauseBackgroundAnimationFrameId);
-            touchControls.classList.remove('hidden-on-power-select'); // Afficher les contrôles tactiles
-            gameLoop();
-        }
-
-        function checkCollision() {
-            if (isPaused) {
-                return;
+        function triggerBackgroundChange() {
+            if (!transitioningBackground) {
+                transitioningBackground = true;
+                transitionStartTime = Date.now();
+                currentBackgroundColorIndex = (currentBackgroundColorIndex + 1) % BACKGROUND_COLORS.length;
+                targetColor = BACKGROUND_COLORS[currentBackgroundColorIndex];
             }
+        }
 
-            const playerCollisionRect = {
-                x: player.x - (player.width * playerScale - player.width) / 2,
-                y: player.y - (player.height * playerScale - player.height) / 2,
-                width: player.width * playerScale,
-                height: player.height * playerScale
-            };
+        function checkCollisions() {
+            if (isInvulnerable) return;
 
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 const obstacle = obstacles[i];
-
-                if (playerCollisionRect.x < obstacle.x + obstacle.width &&
-                    playerCollisionRect.x + playerCollisionRect.width > obstacle.x &&
-                    playerCollisionRect.y < obstacle.y + obstacle.height &&
-                    playerCollisionRect.y + playerCollisionRect.height > obstacle.y) {
-
-                    if (isInvulnerable) {
-                        obstacles.splice(i, 1);
-                        continue;
-                    }
-
-                    if (obstacle.value === player.value) {
-                        player.value *= 2;
+                if (player.x < obstacle.x + obstacle.width &&
+                    player.x + player.width > obstacle.x &&
+                    player.y < obstacle.y + obstacle.height &&
+                    player.y + player.height > obstacle.y) {
+                    
+                    if (player.value >= obstacle.value) {
+                        player.value += obstacle.value;
                         score += obstacle.value;
-                        playerValueDisplay.textContent = player.value;
+                        fusionsSinceLastPower++;
+                        fusionsThisLevel++;
 
                         createTextParticles(
                             obstacle.x + obstacle.width / 2,
                             obstacle.y + obstacle.height / 2,
-                            obstacle.value.toString(),
-                            getBlockTextColor(obstacle.value)
+                            `+${obstacle.value}`,
+                            getBlockColor(obstacle.value)
                         );
-
-                        playerScale = 1.01;
-
+                        
                         obstacles.splice(i, 1);
-
-                        fusionsThisLevel++;
-                        fusionsSinceLastPower++;
-
-                        if (fusionsThisLevel >= fusionsPerLevel) {
-                            currentLevel++;
-                            fusionsThisLevel = 0;
-                            gameSpeed += 0.2 * (gameCanvas.height / 600); // Augmentation de vitesse proportionnelle
-                            
-                            startColor = interpolatedColor;
-                            currentBackgroundColorIndex = (currentBackgroundColorIndex + 1) % BACKGROUND_COLORS.length;
-                            targetColor = BACKGROUND_COLORS[currentBackgroundColorIndex];
-                            transitionStartTime = Date.now();
-                            transitioningBackground = true;
-                        }
+                        playerScale = PLAYER_SCALE_MAX;
 
                         if (fusionsSinceLastPower >= fusionsForPower) {
                             fusionsSinceLastPower = 0;
-                            powerSelectionActive = true;
-                            pauseGame();
-                            showPowerSelectionUI();
-                            return;
+                            // Déclencher la sélection de pouvoir
                         }
-
+                        if (fusionsThisLevel >= fusionsPerLevel) {
+                            levelUp();
+                        }
                     } else {
-                        gameOver = true;
-                        restartButton.style.display = 'block';
-                        cancelAnimationFrame(animationFrameId);
-                        cancelAnimationFrame(pauseBackgroundAnimationFrameId); // Arrêter l'animation du fond aussi
+                        endGame();
                         return;
                     }
                 }
             }
-
-            const obstaclesToProcess = [...obstacles];
-            let obstaclesToRemove = new Set();
-            let newObstaclesToAdd = [];
-
-            for (let i = 0; i < obstaclesToProcess.length; i++) {
-                const obstacleA = obstaclesToProcess[i];
-
-                if (obstaclesToRemove.has(obstacleA)) {
-                    continue;
-                }
-
-                for (let j = i + 1; j < obstaclesToProcess.length; j++) {
-                    const obstacleB = obstaclesToProcess[j];
-
-                    if (obstaclesToRemove.has(obstacleB)) {
-                        continue;
-                    }
-
-                    const distSq = (obstacleA.x - obstacleB.x) ** 2 + (obstacleA.y - obstacleB.y) ** 2;
-                    const minDistanceSq = (OBSTACLE_FIXED_WIDTH * 0.8) ** 2;
-
-                    if (distSq < minDistanceSq || (
-                        obstacleA.x < obstacleB.x + obstacleB.width &&
-                        obstacleA.x + obstacleA.width > obstacleB.x &&
-                        obstacleA.y < obstacleB.y + obstacleB.height &&
-                        obstacleA.y + obstacleB.height > obstacleB.y
-                    )) {
-                        const centerAX = obstacleA.x + obstacleA.width / 2;
-                        const centerAY = obstacleA.y + obstacleA.height / 2;
-                        const centerBX = obstacleB.x + obstacleB.width / 2;
-                        const centerBY = obstacleB.y + obstacleB.height / 2;
-
-                        const collisionCenterX = (centerAX + centerBX) / 2;
-                        const collisionCenterY = (centerAY + centerBY) / 2;
-
-                        const newBlockX = collisionCenterX - OBSTACLE_FIXED_WIDTH / 2;
-                        const newBlockY = collisionCenterY - OBSTACLE_FIXED_HEIGHT / 2;
-
-
-                        if (obstacleA.value === obstacleB.value) {
-                            const newValue = obstacleA.value * 2;
-                            score += newValue;
-
-                            newObstaclesToAdd.push({
-                                x: newBlockX,
-                                y: newBlockY,
-                                value: newValue
-                            });
-
-                            createTextParticles(collisionCenterX, collisionCenterY, newValue.toString(), getBlockTextColor(newValue));
-
-                            obstaclesToRemove.add(obstacleA);
-                                obstaclesToRemove.add(obstacleB);
-
-                            break;
-                        } else {
-                            let biggerBlock, smallerBlock;
-
-                            if (obstacleA.value > obstacleB.value) {
-                                biggerBlock = obstacleA;
-                                smallerBlock = obstacleB;
-                            } else {
-                                biggerBlock = obstacleB;
-                                smallerBlock = obstacleA;
-                            }
-
-                            const newValue = biggerBlock.value / 2;
-
-                            if (newValue < 2) {
-                                obstaclesToRemove.add(obstacleA);
-                                obstaclesToRemove.add(obstacleB);
-                                break;
-                            }
-
-                            newObstaclesToAdd.push({
-                                x: newBlockX,
-                                y: newBlockY,
-                                value: newValue
-                            });
-
-                            createTextParticles(collisionCenterX, collisionCenterY, `-${smallerBlock.value}`, '#FF4500');
-                            createTextParticles(collisionCenterX, collisionCenterY, newValue.toString(), getBlockTextColor(newValue));
-
-                            obstaclesToRemove.add(obstacleA);
-                            obstaclesToRemove.add(obstacleB);
-
-                            break;
-                        }
-                    }
-                }
-            }
-
-            obstacles = obstacles.filter(obstacle => !obstaclesToRemove.has(obstacle));
-
-            newObstaclesToAdd.forEach(newBlockData => {
-                createObstacle(newBlockData.x, newBlockData.y, newBlockData.value);
-            });
         }
 
-
-        function updatePowerTimers() {
-            const currentTime = Date.now();
-
-            if (isInvulnerable && currentTime > invulnerabilityEndTime) {
-                isInvulnerable = false;
-            }
-
-            if (isSpeedBoostActive && currentTime > speedBoostEndTime) {
-                isSpeedBoostActive = false;
-                player.playerSpeed = player.basePlayerSpeed;
-            }
-
-            if (unlockedPowers['Destruction']) {
-                destroyPowerButton.classList.remove('disabled');
-                const timeSinceLastShot = currentTime - destroyLastShotTime;
-                if (destroyCharges === 0 && timeSinceLastShot < DESTROY_COOLDOWN_BETWEEN_SHOTS && destroyLastShotTime !== 0) {
-                     destroyPowerButton.classList.add('disabled');
-                     destroyPowerButton.classList.remove('active');
-                     destroyPowerButton.classList.add('cooldown');
-                } else if (destroyCharges === 0) {
-                    destroyPowerButton.classList.add('disabled');
-                    destroyPowerButton.classList.remove('active');
-                    destroyPowerButton.classList.remove('cooldown');
-                } else if (timeSinceLastShot < DESTROY_COOLDOWN_BETWEEN_SHOTS) {
-                    destroyPowerButton.classList.add('cooldown');
-                    destroyPowerButton.classList.remove('active');
-                } else {
-                    destroyPowerButton.classList.remove('cooldown');
-                    destroyPowerButton.classList.add('active');
-                }
-            } else {
-                 destroyPowerButton.classList.add('disabled');
-                 destroyPowerButton.classList.remove('cooldown');
-                 destroyPowerButton.classList.remove('active');
-            }
+        function levelUp() {
+            currentLevel++;
+            fusionsThisLevel = 0;
+            gameSpeed += 0.3;
+            player.basePlayerSpeed += 0.2;
+            triggerBackgroundChange();
+            showStickmanDialogue(`Niveau ${currentLevel} ! La vitesse augmente !`);
         }
-
-
-        function drawPowerFeedbacks() {
-            const currentTime = Date.now();
-            const scaleFactor = gameCanvas.width / 700;
-            
-            const feedbackX = player.x + player.width / 2 + 70 * scaleFactor;
-            let feedbackY = player.y - 50 * scaleFactor;
-
-            ctx.save();
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.font = `bold ${20 * scaleFactor}px Arial`;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-
-            let activeFeedbacks = [];
-
-            if (isInvulnerable) {
-                const timeLeft = Math.ceil((invulnerabilityEndTime - currentTime) / 1000);
-                activeFeedbacks.push({ name: "Invulnérabilité", text: `${timeLeft}s`, icon: powerIconCodes["Invulnérabilité"] });
-            }
-
-            if (isSpeedBoostActive) {
-                const timeLeft = Math.ceil((speedBoostEndTime - currentTime) / 1000);
-                activeFeedbacks.push({ name: "Flash", text: `${timeLeft}s`, icon: powerIconCodes["Flash"] });
-            }
-
-            if (unlockedPowers['Destruction']) {
-                if (destroyCharges > 0 && currentTime - destroyLastShotTime < DESTROY_COOLDOWN_BETWEEN_SHOTS && destroyLastShotTime !== 0) {
-                    const cooldownLeft = Math.ceil((DESTROY_COOLDOWN_BETWEEN_SHOTS - (currentTime - destroyLastShotTime)) / 1000);
-                    activeFeedbacks.push({ name: "Destruction", text: `CD: ${cooldownLeft}s`, icon: powerIconCodes["Destruction"] });
-                } else if (destroyCharges > 0) {
-                     activeFeedbacks.push({ name: "Destruction", text: `Charges: ${destroyCharges}`, icon: powerIconCodes["Destruction"] });
-                } else if (destroyCharges === 0 && destroyLastShotTime !== 0) {
-                    activeFeedbacks.push({ name: "Destruction", text: `Recharge requise`, icon: powerIconCodes["Destruction"] });
-                }
-            }
-
-            let currentOffset = 0;
-            const itemSpacing = 15 * scaleFactor;
-            const iconTextSpacing = 5 * scaleFactor;
-
-            activeFeedbacks.forEach(feedback => {
-                ctx.save();
-                ctx.globalAlpha = 0.7;
-
-                if (feedback.icon) {
-                    ctx.font = `900 ${20 * scaleFactor}px "${feedback.icon.font}"`;
-                    ctx.fillText(feedback.icon.char, feedbackX, feedbackY + currentOffset);
-                    currentOffset += 25 * scaleFactor;
-                }
-
-                ctx.font = `bold ${16 * scaleFactor}px Arial`;
-                ctx.fillText(feedback.text, feedbackX, feedbackY + currentOffset);
-
-                currentOffset += 20 * scaleFactor;
-                ctx.restore();
-            });
-
-            ctx.restore();
-        }
-
-        function updateGameStatus() {
-            if (!gameOver) {
-                scoreDisplay.textContent = score;
-                levelDisplay.textContent = currentLevel;
-                pauseButton.style.display = 'block';
-                // La visibilité de fullscreenButton est gérée par checkDisplayMode et les événements fullscreenchange
-            } else {
-                if (score > highScore) {
-                    highScore = score;
-                    localStorage.setItem('numericEvaderHighScore', highScore);
-                }
-                pauseButton.style.display = 'none';
-                fullscreenButton.style.display = 'none'; // Masquer le bouton plein écran au Game Over
-                touchControls.classList.add('hidden-on-power-select'); // Masquer les contrôles tactiles au Game Over
-            }
+        
+        function updateUI() {
+            scoreDisplay.textContent = score;
             highScoreDisplay.textContent = highScore;
+            playerValueDisplay.textContent = player.value;
+            levelDisplay.textContent = currentLevel;
         }
 
-
-        function gameLoop() {
-            if (gameOver) {
-                return;
+        function endGame() {
+            gameOver = true;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('numericEvaderHighScore', highScore);
             }
-
-            if (!isPaused) {
-                // Update et draw du fond "fantomatique" sur backgroundCanvas
-                updateBackgroundTransition();
-                for (let i = 0; i < lightRays.length; i++) {
-                    const ray = lightRays[i];
-                    ray.y -= ray.speed;
-                    if (ray.y < -ray.length) {
-                        ray.y = backgroundCanvas.height;
-                        ray.x = Math.random() * backgroundCanvas.width;
-                        ray.speed = (rayMinSpeed + Math.random() * (rayMaxSpeed - rayMinSpeed)) * (backgroundCanvas.height / 600);
-                        ray.length = (100 + Math.random() * 200) * (backgroundCanvas.width / 700);
-                        ray.width = (5 + Math.random() * 10) * (backgroundCanvas.width / 700);
-                    }
-                }
-                updateEqualizerBars(backgroundCanvas); // Mise à jour des barres du fond
-
-                bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
-                drawBackground(bgCtx, backgroundCanvas, 0.2); // Alpha 0.2 pour l'effet fantomatique
-                drawEqualizerBars(bgCtx, backgroundCanvas, 0.2); // Alpha 0.2 pour les barres
-
-                // Clear et draw du jeu principal sur gameCanvas
-                ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
-                drawBackground(ctx, gameCanvas, 1); // Alpha 1 pour le jeu principal
-                drawEqualizerBars(ctx, gameCanvas, 1); // Alpha 1 pour les barres
-
-                updatePlayer();
-                updateObstacles();
-                updateDestroyShot();
-                checkCollision();
-                updateGameStatus();
-                updateParticles();
-                updatePlayerScale();
-                updatePowerTimers();
-
-                drawPlayer();
-                drawPowerVisualEffects();
-                drawObstacles();
-                drawDestroyShot();
-                drawParticles();
-                drawPowerFeedbacks();
-            }
-
-            if (!isPaused) {
-                animationFrameId = requestAnimationFrame(gameLoop);
-            }
+            restartButton.style.display = 'block';
+            showStickmanDialogue("Oh non ! Essayez encore !");
         }
 
-        // --- Empêcher le menu contextuel du clic droit (utile sur desktop) ---
-        gameCanvas.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-        });
-
-
-        // --- Événements Clavier (pour tests sur PC) ---
-        document.addEventListener('keydown', (e) => {
-            if (gameOver || isPaused) {
-                return;
-            }
-            if (e.key === 'ArrowLeft' || e.key === 'q') {
-                player.speedX = -player.playerSpeed;
-            } else if (e.key === 'ArrowRight' || e.key === 'd') {
-                player.speedX = player.playerSpeed;
-            } else if (e.key === ' ' && unlockedPowers['Destruction']) {
-                const currentTime = Date.now();
-                if (destroyCharges > 0 && currentTime - destroyLastShotTime >= DESTROY_COOLDOWN_BETWEEN_SHOTS) {
-                    destroyShot = {
-                        x: player.x + player.width / 2 - (PROJECTILE_SIZE * (gameCanvas.width / 700)) / 2,
-                        y: player.y
-                    };
-                    destroyCharges--;
-                    destroyLastShotTime = currentTime;
-                }
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'q' || e.key === 'd') {
-                player.speedX = 0;
-            }
-        });
-
-        // --- Contrôles tactiles ---
-        touchLeftButton.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // Empêche le défilement et le zoom
-            if (gameOver || isPaused) return;
-            player.speedX = -player.playerSpeed;
-        }, { passive: false }); // { passive: false } pour permettre preventDefault
-
-        touchLeftButton.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            if (gameOver || isPaused) return;
-            player.speedX = 0;
-        });
-
-        touchRightButton.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            if (gameOver || isPaused) return;
-            player.speedX = player.playerSpeed;
-        }, { passive: false }); // { passive: false } pour permettre preventDefault
-
-        touchRightButton.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            if (gameOver || isPaused) return;
-            player.speedX = 0;
-        });
-
-        // Gestion du bouton destruction (toujours utilisable même si les autres contrôles sont masqués par le CSS)
-        destroyPowerButton.addEventListener('click', () => {
-             if (gameOver || isPaused || !unlockedPowers['Destruction']) return;
-            const currentTime = Date.now();
-            if (destroyCharges > 0 && currentTime - destroyLastShotTime >= DESTROY_COOLDOWN_BETWEEN_SHOTS) {
-                destroyShot = {
-                    x: player.x + player.width / 2 - (PROJECTILE_SIZE * (gameCanvas.width / 700)) / 2,
-                    y: player.y
-                };
-                destroyCharges--;
-                destroyLastShotTime = currentTime;
-            }
-        });
-
-        pauseButton.addEventListener('click', () => {
-            if (gameOver || powerSelectionActive) {
-                return;
-            }
-            if (isPaused) {
-                resumeGame();
-            } else {
-                pauseGame();
-            }
-        });
-
-        // Bouton Plein écran (visible seulement si non PWA)
-        fullscreenButton.addEventListener('click', () => {
-            const elem = document.documentElement; // ou document.body ou game-container
-
-            if (document.fullscreenElement) {
-                document.exitFullscreen().catch(err => {
-                    console.error(`Erreur de sortie du mode plein écran: ${err.message}`);
-                });
-            } else {
-                if (elem.requestFullscreen) {
-                    elem.requestFullscreen();
-                } else if (elem.webkitRequestFullscreen) { /* Safari */
-                    elem.webkitRequestFullscreen();
-                } else if (elem.msRequestFullscreen) { /* IE11 */
-                    elem.msRequestFullscreen();
-                }
-            }
-        });
-
-        // Écouteur pour le changement d'état du plein écran (pour masquer/afficher le bouton si nécessaire)
-        document.addEventListener('fullscreenchange', checkDisplayMode);
-        document.addEventListener('webkitfullscreenchange', checkDisplayMode);
-        document.addEventListener('msfullscreenchange', checkDisplayMode);
-
-
-        restartButton.addEventListener('click', () => {
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-            }
-            if (pauseBackgroundAnimationFrameId) {
-                cancelAnimationFrame(pauseBackgroundAnimationFrameId);
-            }
-
-            player = {
-                x: gameCanvas.width / 2 - 25 * (gameCanvas.width / 700),
-                y: gameCanvas.height - 70 * (gameCanvas.height / 600),
-                width: 50 * (gameCanvas.width / 700),
-                height: 50 * (gameCanvas.width / 700),
-                speedX: 0,
-                basePlayerSpeed: 7 * (gameCanvas.width / 700),
-                playerSpeed: 7 * (gameCanvas.width / 700),
-                value: 2
-            };
+        function restartGame() {
+            player.value = 2;
+            player.x = gameCanvas.width / 2 - player.width / 2;
+            player.y = gameCanvas.height - player.height - 10 * (gameCanvas.width / 700);
             obstacles = [];
             score = 0;
             gameSpeed = 2;
             gameOver = false;
             isPaused = false;
-            lastObstacleTime = 0;
-            nextObstacleInterval = Math.random() * (obstacleMaxInterval - obstacleMinInterval) + obstacleMinInterval;
-
+            restartButton.style.display = 'none';
+            pauseButton.textContent = 'Pause';
             currentLevel = 1;
             fusionsThisLevel = 0;
             fusionsSinceLastPower = 0;
-            particles = [];
-            playerScale = 1;
-
-            powerSelectionActive = false;
-            availablePowers = [];
-            powerOptions = [];
-            powerSelectionAnimationFrame = 0;
-            glowAlpha = 0;
-            glowDirection = 1;
-
-            unlockedPowers = {
-                'Invulnérabilité': false,
-                'Flash': false,
-                'Destruction': false
-            };
+            
+            // Réinitialiser les pouvoirs
             isInvulnerable = false;
-            invulnerabilityEndTime = 0;
             isSpeedBoostActive = false;
-            speedBoostEndTime = 0;
+            destroyCharges = 0;
             destroyShot = null;
             destroyLastShotTime = 0;
-            destroyCharges = 0;
+            updatePowerButtons();
 
-            currentBackgroundColorIndex = 0;
-            transitioningBackground = false;
-            startColor = BACKGROUND_COLORS[0];
-            targetColor = BACKGROUND_COLORS[0];
-            interpolatedColor = BACKGROUND_COLORS[0];
-
-            initializeBackgroundElements(); // Réinitialiser les éléments pour les deux canvases
-            equalizerTime = 0;
-
-            scoreDisplay.textContent = '0';
-            playerValueDisplay.textContent = player.value;
-            levelDisplay.textContent = currentLevel;
-            restartButton.style.display = 'none';
-            pauseButton.textContent = 'Pause';
-            pauseButton.style.display = 'block';
-            checkDisplayMode(); // S'assurer que le bouton plein écran est géré correctement au redémarrage
-            touchControls.classList.remove('hidden-on-power-select'); // Afficher les contrôles tactiles au redémarrage
-
-            updatePowerTimers();
-
+            // Cacher le stickman au redémarrage
+            hideStickman();
+            
+            // Relancer la boucle de jeu
             gameLoop();
-        });
-
-        highScoreDisplay.textContent = highScore;
-        playerValueDisplay.textContent = player.value;
-        levelDisplay.textContent = currentLevel;
-
-        const POWER_TYPES_SELECTION = [
-            {
-                name: "Invulnérabilité",
-                description: "Devient invulnérable aux collisions pendant un court instant.",
-                anecdote: "Le bouclier mystique, une bulle qui rigole quand les blocs vous frappent ! Ils glissent sans vous faire mal. C'est comme une savonnette pour les nombres !",
-                isActive: () => isInvulnerable,
-                isUsable: () => !isInvulnerable
-            },
-            {
-                name: "Flash",
-                description: "Augmente drastiquement votre vitesse de déplacement temporairement.",
-                anecdote: "Avec ce pouvoir, vous allez si vite que même la lumière ne vous suit pas ! Attention à ne pas laisser votre ombre derrière vous.",
-                isActive: () => isSpeedBoostActive,
-                isUsable: () => !isSpeedBoostActive
-            },
-            {
-                name: "Destruction",
-                description: "Lance un projectile qui détruit le premier bloc qu'il touche (2 charges).",
-                anecdote: "Un projectile magique qui fait disparaître les nombres comme par magie ! Mais ne vous inquiétez pas, personne ne va faire de crise existentielle.",
-                isActive: () => destroyCharges > 0,
-                isUsable: () => destroyCharges < MAX_DESTROY_CHARGES || (destroyCharges > 0 && (Date.now() - destroyLastShotTime) >= DESTROY_COOLDOWN_BETWEEN_SHOTS)
-            }
-        ];
-
-
-        function getRandomPowers(numOptions) {
-            let optionsToPropose = [];
-
-            const unblockedPowers = POWER_TYPES_SELECTION.filter(power => !unlockedPowers[power.name]);
-            if (unblockedPowers.length > 0) {
-                const shuffledUnblocked = [...unblockedPowers].sort(() => 0.5 - Math.random());
-                optionsToPropose.push(shuffledUnblocked[0]);
-            }
-
-            const potentialReactivations = POWER_TYPES_SELECTION.filter(power =>
-                unlockedPowers[power.name] && power.isUsable() && !optionsToPropose.includes(power)
-            );
-
-            const shuffledReactivations = [...potentialReactivations].sort(() => 0.5 - Math.random());
-
-            for (let i = 0; i < shuffledReactivations.length && optionsToPropose.length < numOptions; i++) {
-                optionsToPropose.push(shuffledReactivations[i]);
-            }
-
-            if (optionsToPropose.length < numOptions) {
-                const allPowersShuffled = [...POWER_TYPES_SELECTION].sort(() => 0.5 - Math.random());
-                for (let i = 0; i < allPowersShuffled.length && optionsToPropose.length < numOptions; i++) {
-                    if (!optionsToPropose.includes(allPowersShuffled[i])) {
-                        optionsToPropose.push(allPowersShuffled[i]);
-                    }
-                }
-            }
-
-            return optionsToPropose;
         }
 
-
-        function showPowerSelectionUI() {
-            availablePowers = getRandomPowers(NUM_POWER_OPTIONS);
-
-            powerOptions = [];
-
-            const panelWidth = POWER_OPTION_WIDTH;
-            const totalHeightOfOptions = (POWER_OPTION_HEIGHT + POWER_OPTION_MARGIN) * NUM_POWER_OPTIONS - POWER_OPTION_MARGIN;
-            
-            let startY = (gameCanvas.height / 2) - (totalHeightOfOptions / 2); 
-
-            availablePowers.forEach((power, index) => {
-                const optionX = gameCanvas.width / 2 - (panelWidth / 2);
-                const optionY = startY + (POWER_OPTION_HEIGHT + POWER_OPTION_MARGIN) * index;
-
-                powerOptions.push({
-                    x: optionX,
-                    y: optionY,
-                    width: panelWidth,
-                    height: POWER_OPTION_HEIGHT,
-                    power: power,
-                    hover: false,
-                    currentScale: 1,
-                    glowAlpha: 0,
-                    iconData: powerIconCodes[power.name] || { char: '\uf128', font: 'Font Awesome 6 Free', class: 'fas' },
-                    stickmanAnimFrame: 0,
-                    stickmanAnimDirection: 1
-                });
-            });
-
-            powerSelectionAnimationFrame = 0;
-            glowAlpha = 0;
-            glowDirection = 1;
-
-            stickmanContainer.style.opacity = 0;
-            stickmanDialogue.textContent = "";
-            touchControls.classList.add('hidden-on-power-select'); // Masquer les contrôles tactiles
-        }
-
-        let stickmanFrame = 0;
-        const STICKMAN_ANIM_SPEED = 0.05;
-
-        function drawStickman(ctxToUse, x, y, frame) { // Prend ctxToUse en param
-            const scaleFactor = stickmanBody.width / 150; // Base de 150 pour le stickman
-            ctxToUse.strokeStyle = 'black';
-            ctxToUse.lineWidth = 3 * scaleFactor;
-            ctxToUse.lineCap = 'round';
-
-            ctxToUse.beginPath();
-            ctxToUse.moveTo(x, y - 50 * scaleFactor);
-            ctxToUse.lineTo(x, y - 10 * scaleFactor);
-            ctxToUse.stroke();
-
-            ctxToUse.beginPath();
-            ctxToUse.arc(x, y - 65 * scaleFactor, 15 * scaleFactor, 0, Math.PI * 2);
-            ctxToUse.stroke();
-
-            const armAngle = Math.sin(frame * 0.1) * 0.3;
-            ctxToUse.beginPath();
-            ctxToUse.moveTo(x, y - 45 * scaleFactor);
-            ctxToUse.lineTo(x - 20 * scaleFactor * Math.cos(armAngle), y - 45 * scaleFactor + 20 * scaleFactor * Math.sin(armAngle));
-            ctxToUse.moveTo(x, y - 45 * scaleFactor);
-            ctxToUse.lineTo(x + 20 * scaleFactor * Math.cos(armAngle), y - 45 * scaleFactor + 20 * scaleFactor * Math.sin(armAngle));
-            ctxToUse.stroke();
-
-            const legAngle = Math.sin(frame * 0.1 + Math.PI / 2) * 0.2;
-            ctxToUse.beginPath();
-            ctxToUse.moveTo(x, y - 10 * scaleFactor);
-            ctxToUse.lineTo(x - 15 * scaleFactor * Math.cos(legAngle), y + 20 * scaleFactor);
-            ctxToUse.moveTo(x, y - 10 * scaleFactor);
-            ctxToUse.lineTo(x + 15 * scaleFactor * Math.cos(legAngle), y + 20 * scaleFactor);
-            ctxToUse.stroke();
-        }
-
-
-        function drawPowerSelectionUI() {
-            const scaleFactor = gameCanvas.width / 700; // Facteur d'échelle basé sur la largeur du gameCanvas
-
-            const panelWidth = POWER_OPTION_WIDTH + (60 * scaleFactor);
-            const panelHeight = (POWER_OPTION_HEIGHT + POWER_OPTION_MARGIN) * NUM_POWER_OPTIONS + (80 * scaleFactor);
-            
-            const panelX = (gameCanvas.width - panelWidth) / 2;
-            const firstOptionY = powerOptions.length > 0 ? powerOptions[0].y : 0;
-            const panelY = firstOptionY - (50 * scaleFactor);
-
-            ctx.fillStyle = '#1a1a2a';
-            drawRoundedRect(ctx, panelX, panelY, panelWidth, panelHeight, 15 * scaleFactor);
-            ctx.strokeStyle = '#00FFFF';
-            ctx.lineWidth = 3 * scaleFactor;
-            ctx.stroke();
-
-            ctx.fillStyle = '#00FFFF';
-            ctx.font = `bold ${36 * scaleFactor}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.fillText('Choisissez votre Pouvoir !', gameCanvas.width / 2, panelY + (20 * scaleFactor));
-
-            powerSelectionAnimationFrame += POWER_ANIM_SPEED;
-            const animPulse = Math.sin(powerSelectionAnimationFrame * 0.1) * (5 * scaleFactor);
-
-            glowAlpha += glowDirection * CARD_HOVER_GLOW_SPEED;
-            if (glowAlpha > CARD_HOVER_GLOW_MAX_ALPHA || glowAlpha < 0) {
-                glowDirection *= -1;
-                glowAlpha = Math.max(0, Math.min(CARD_HOVER_GLOW_MAX_ALPHA, glowAlpha));
-            }
-
-            let hoveredOption = null;
-
-            powerOptions.forEach((option) => {
-                const targetScale = option.hover ? CARD_HOVER_SCALE_MAX : 1;
-                option.currentScale += (targetScale - option.currentScale) * 0.1;
-
-                const scaledWidth = option.width * option.currentScale;
-                const scaledHeight = option.height * option.currentScale;
-                const scaledX = option.x - (scaledWidth - option.width) / 2;
-                const scaledY = option.y + animPulse - (scaledHeight - option.height) / 2;
-
-                ctx.save();
-
-                if (option.hover) {
-                    ctx.shadowBlur = 25 * scaleFactor;
-                    ctx.shadowColor = `rgba(0, 255, 255, ${glowAlpha})`;
-                    hoveredOption = option;
+        function togglePause() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                pauseButton.textContent = 'Reprendre';
+                if (pauseBackgroundAnimationFrameId) {
+                    cancelAnimationFrame(pauseBackgroundAnimationFrameId);
                 }
-
-                ctx.fillStyle = option.hover ? '#004A8F' : '#007BFF';
-                drawRoundedRect(ctx, scaledX, scaledY, scaledWidth, scaledHeight, 10 * scaleFactor);
-
-                ctx.strokeStyle = '#00BFFF';
-                ctx.lineWidth = 2 * option.currentScale * scaleFactor;
-                drawRoundedRect(ctx, scaledX + 2 * scaleFactor, scaledY + 2 * scaleFactor, scaledWidth - 4 * scaleFactor, scaledHeight - 4 * scaleFactor, 8 * scaleFactor);
-
-                ctx.strokeStyle = '#00FFFF';
-                ctx.lineWidth = 2 * option.currentScale * scaleFactor;
-                ctx.stroke();
-
-                ctx.restore();
-
-                if (option.iconData) {
-                    ctx.save();
-                    ctx.fillStyle = 'white';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-
-                    const iconSize = 60 * option.currentScale * scaleFactor;
-                    ctx.font = `900 ${iconSize}px "${option.iconData.font}"`;
-
-                    ctx.fillText(
-                        option.iconData.char,
-                        scaledX + scaledWidth / 2,
-                        scaledY + scaledHeight / 2 - (30 * option.currentScale * scaleFactor)
-                    );
-                    ctx.restore();
-                }
-
-                ctx.fillStyle = 'white';
-                ctx.font = `bold ${24 * option.currentScale * scaleFactor}px Arial`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(option.power.name, scaledX + scaledWidth / 2, scaledY + scaledHeight / 2 + (10 * option.currentScale * scaleFactor));
-
-                ctx.font = `${18 * option.currentScale * scaleFactor}px Arial`;
-                ctx.fillStyle = '#DDDDDD';
-                ctx.fillText(option.power.description, scaledX + scaledWidth / 2, scaledY + scaledHeight * 3 / 4 + (15 * option.currentScale * scaleFactor));
-            });
-
-            if (hoveredOption) {
-                stickmanContainer.style.opacity = 1;
-                stickmanDialogue.textContent = hoveredOption.power.anecdote;
-
-                // Positionner le conteneur du stickman en bas du panneau de sélection
-                const stickmanHeight = stickmanContainer.offsetHeight;
-                stickmanContainer.style.left = `${gameCanvas.width / 2}px`;
-                stickmanContainer.style.top = `${panelY + panelHeight + 10 * scaleFactor}px`; // Juste en dessous du panneau
-                stickmanContainer.style.transform = `translateX(-50%)`; // Centrer le conteneur
-
-                stickmanCtx.clearRect(0, 0, stickmanBody.width, stickmanBody.height);
-                stickmanFrame += STICKMAN_ANIM_SPEED;
-                drawStickman(stickmanCtx, stickmanBody.width / 2, stickmanBody.height - (20 * scaleFactor), stickmanFrame);
-
+                lastPauseFrameTime = 0; // Reset pour un démarrage propre
+                pauseBackgroundAnimationFrameId = requestAnimationFrame(animatePauseBackground);
             } else {
-                stickmanContainer.style.opacity = 0;
-                stickmanDialogue.textContent = "";
-            }
-
-            gameCanvas.style.cursor = 'default'; // Cursor pour le gameCanvas
-            powerOptions.forEach(option => {
-                if (option.hover) {
-                    gameCanvas.style.cursor = 'pointer';
+                pauseButton.textContent = 'Pause';
+                if (pauseBackgroundAnimationFrameId) {
+                    cancelAnimationFrame(pauseBackgroundAnimationFrameId);
                 }
-            });
-        }
-
-
-        function selectPower(selectedIndex) {
-            const chosenPower = availablePowers[selectedIndex];
-
-            unlockedPowers[chosenPower.name] = true;
-
-            if (chosenPower.name === "Invulnérabilité") {
-                isInvulnerable = true;
-                invulnerabilityEndTime = Date.now() + INVULNERABILITY_DURATION;
-            } else if (chosenPower.name === "Flash") {
-                isSpeedBoostActive = true;
-                speedBoostEndTime = Date.now() + SPEED_BOOST_DURATION;
-                player.playerSpeed = player.basePlayerSpeed * SPEED_BOOST_FACTOR;
-            } else if (chosenPower.name === "Destruction") {
-                destroyCharges = MAX_DESTROY_CHARGES;
-                destroyLastShotTime = 0;
+                gameLoop(); // Reprendre la boucle de jeu principale
             }
-
-            powerSelectionActive = false;
-            powerOptions.forEach(option => option.hover = false);
-            stickmanContainer.style.opacity = 0;
-            resumeGame();
-            touchControls.classList.remove('hidden-on-power-select'); // Afficher les contrôles tactiles
         }
+        
+        let keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            updatePlayerSpeed();
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+            updatePlayerSpeed();
+        });
 
-        // --- Gestion des événements tactiles pour la sélection de pouvoir ---
-        gameCanvas.addEventListener('mousemove', (event) => {
-            if (powerSelectionActive && isPaused) {
-                const rect = gameCanvas.getBoundingClientRect();
-                const mouseX = event.clientX - rect.left;
-                const mouseY = event.clientY - rect.top;
-
-                let hoveredOnOption = false;
-                powerOptions.forEach(option => {
-                    const scaledWidth = option.width * option.currentScale;
-                    const scaledHeight = option.height * option.currentScale;
-                    const scaledX = option.x - (scaledWidth - option.width) / 2;
-                    const scaledY = option.y + Math.sin(powerSelectionAnimationFrame * 0.1) * (5 * (gameCanvas.width / 700)) - (scaledHeight - option.height) / 2;
-
-                    if (mouseX > scaledX && mouseX < scaledX + scaledWidth &&
-                        mouseY > scaledY && mouseY < scaledY + scaledHeight) {
-                        option.hover = true;
-                        hoveredOnOption = true;
-                    } else {
-                        option.hover = false;
-                    }
-                });
-                gameCanvas.style.cursor = hoveredOnOption ? 'pointer' : 'default';
+        function updatePlayerSpeed() {
+            let targetSpeedX = 0;
+            if (keys['ArrowLeft']) {
+                targetSpeedX = -player.playerSpeed;
+            }
+            if (keys['ArrowRight']) {
+                targetSpeedX = player.playerSpeed;
+            }
+            player.speedX = targetSpeedX;
+        }
+        
+        // --- Gestion des Pouvoirs ---
+        function updatePowerButtons() {
+            // Logique pour le bouton de destruction
+            if (destroyCharges > 0 && Date.now() - destroyLastShotTime > DESTROY_COOLDOWN_BETWEEN_SHOTS) {
+                destroyPowerButton.classList.remove('disabled', 'cooldown');
+            } else if (destroyCharges > 0) {
+                destroyPowerButton.classList.add('cooldown');
+                destroyPowerButton.classList.remove('disabled');
             } else {
-                gameCanvas.style.cursor = 'default';
+                destroyPowerButton.classList.add('disabled');
+                destroyPowerButton.classList.remove('cooldown');
             }
-        });
-
-        gameCanvas.addEventListener('click', (event) => {
-            if (powerSelectionActive && isPaused) {
-                const rect = gameCanvas.getBoundingClientRect();
-                const mouseX = event.clientX - rect.left;
-                const mouseY = event.clientY - rect.top;
-
-                powerOptions.forEach((option, index) => {
-                    const scaledWidth = option.width * option.currentScale;
-                    const scaledHeight = option.height * option.currentScale;
-                    const scaledX = option.x - (scaledWidth - option.width) / 2;
-                    const scaledY = option.y + Math.sin(powerSelectionAnimationFrame * 0.1) * (5 * (gameCanvas.width / 700)) - (scaledHeight - option.height) / 2;
-
-                    if (mouseX > scaledX && mouseX < scaledX + scaledWidth &&
-                        mouseY > scaledY && mouseY < scaledY + scaledHeight) {
-                        selectPower(index);
-                    }
-                });
-            }
-        });
-
-        gameCanvas.addEventListener('touchstart', (event) => {
-            if (powerSelectionActive && isPaused) {
-                event.preventDefault(); // Empêche le défilement/zoom
-                const rect = gameCanvas.getBoundingClientRect();
-                const touch = event.touches[0];
-                const touchX = touch.clientX - rect.left;
-                const touchY = touch.clientY - rect.top;
-
-                powerOptions.forEach((option, index) => {
-                    const scaledWidth = option.width * option.currentScale;
-                    const scaledHeight = option.height * option.currentScale;
-                    const scaledX = option.x - (scaledWidth - option.width) / 2;
-                    const scaledY = option.y + Math.sin(powerSelectionAnimationFrame * 0.1) * (5 * (gameCanvas.width / 700)) - (scaledHeight - option.height) / 2;
-
-                    if (touchX > scaledX && touchX < scaledX + scaledWidth &&
-                        touchY > scaledY && touchY < scaledY + scaledHeight) {
-                        selectPower(index);
-                    }
-                });
-            }
-        }, { passive: false }); // { passive: false } pour permettre preventDefault
-
-        // Initialise le mini-canvas du stickman
-        stickmanBody.width = 150;
-        stickmanBody.height = 150;
-        stickmanBody.width = 100 * (gameCanvas.width / 700); // Taille plus petite pour le mobile, proportionnelle
-        stickmanBody.height = 100 * (gameCanvas.width / 700);
-        stickmanCtx.clearRect(0, 0, stickmanBody.width, stickmanBody.height);
-        drawStickman(stickmanCtx, stickmanBody.width / 2, stickmanBody.height - (20 * (gameCanvas.width / 700)), stickmanFrame); // Dessiner une fois au démarrage
-
-        // Enregistrement du Service Worker (pour la PWA)
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(registration => {
-                        console.log('Service Worker enregistré avec succès:', registration);
-                    })
-                    .catch(error => {
-                        console.log('Échec de l\'enregistrement du Service Worker:', error);
-                    });
-            });
         }
+
+        function activateDestroyPower() {
+            if (destroyCharges > 0 && Date.now() - destroyLastShotTime > DESTROY_COOLDOWN_BETWEEN_SHOTS) {
+                destroyShot = {
+                    x: player.x + player.width / 2 - (PROJECTILE_SIZE * (gameCanvas.width / 700)) / 2,
+                    y: player.y
+                };
+                destroyCharges--;
+                destroyLastShotTime = Date.now();
+                updatePowerButtons();
+            }
+        }
+
+        // --- Stickman ---
+        let stickmanTimeout;
+        function showStickmanDialogue(message, duration = 3000) {
+            stickmanDialogue.textContent = message;
+            
+            // Positionner le stickman
+            const playerCenterX = player.x + player.width / 2;
+            const stickmanWidth = stickmanContainer.offsetWidth; // Utiliser la largeur réelle
+            stickmanContainer.style.left = `${playerCenterX - stickmanWidth / 2}px`;
+            stickmanContainer.style.bottom = `${window.innerHeight - player.y}px`; // Aligner avec le bas de l'écran
+
+            stickmanContainer.style.opacity = 1;
+            
+            clearTimeout(stickmanTimeout);
+            stickmanTimeout = setTimeout(hideStickman, duration);
+        }
+
+        function hideStickman() {
+            stickmanContainer.style.opacity = 0;
+        }
+
+        function drawStickman() {
+            const w = stickmanBody.width;
+            const h = stickmanBody.height;
+            stickmanCtx.clearRect(0, 0, w, h);
+            
+            // Tête
+            stickmanCtx.beginPath();
+            stickmanCtx.arc(w / 2, h * 0.2, w * 0.1, 0, Math.PI * 2);
+            stickmanCtx.fillStyle = '#333';
+            stickmanCtx.fill();
+
+            // Corps
+            stickmanCtx.beginPath();
+            stickmanCtx.moveTo(w / 2, h * 0.3);
+            stickmanCtx.lineTo(w / 2, h * 0.6);
+            stickmanCtx.strokeStyle = '#333';
+            stickmanCtx.lineWidth = 3;
+            stickmanCtx.stroke();
+
+            // Bras
+            stickmanCtx.beginPath();
+            stickmanCtx.moveTo(w * 0.3, h * 0.7);
+            stickmanCtx.lineTo(w / 2, h * 0.4);
+            stickmanCtx.lineTo(w * 0.7, h * 0.7);
+            stickmanCtx.stroke();
+            
+            // Jambes
+            stickmanCtx.beginPath();
+            stickmanCtx.moveTo(w * 0.3, h * 0.9);
+            stickmanCtx.lineTo(w / 2, h * 0.6);
+            stickmanCtx.lineTo(w * 0.7, h * 0.9);
+            stickmanCtx.stroke();
+        }
+
+        // --- Boucle de jeu principale ---
+        function gameLoop(timestamp) {
+            if (gameOver || isPaused) {
+                return;
+            }
+
+            updateBackgroundTransition();
+            
+            // Mise à jour du fond (sur le canvas de fond)
+            bgCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+            drawBackground(bgCtx, backgroundCanvas);
+            updateEqualizerBars(backgroundCanvas);
+            drawEqualizerBars(bgCtx, backgroundCanvas);
+
+            // Mise à jour du jeu (sur le canvas de jeu)
+            ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+            
+            updatePlayer();
+            updatePlayerScale();
+            updateObstacles();
+            updateDestroyShot();
+            updateParticles();
+            
+            checkCollisions();
+            
+            drawObstacles();
+            drawDestroyShot();
+            drawPlayer();
+            drawPowerVisualEffects();
+            drawParticles();
+            
+            updateUI();
+            updatePowerButtons();
+            
+            drawStickman(); // Dessiner le stickman à chaque frame
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Écouteurs d'événements ---
+        restartButton.addEventListener('click', restartGame);
+        pauseButton.addEventListener('click', togglePause);
+        destroyPowerButton.addEventListener('click', activateDestroyPower);
+
+        // Contrôles tactiles
+        touchLeftButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            keys['ArrowLeft'] = true;
+            updatePlayerSpeed();
+        });
+        touchLeftButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            keys['ArrowLeft'] = false;
+            updatePlayerSpeed();
+        });
+        touchRightButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            keys['ArrowRight'] = true;
+            updatePlayerSpeed();
+        });
+        touchRightButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            keys['ArrowRight'] = false;
+            updatePlayerSpeed();
+        });
+
+        // Plein écran
+        fullscreenButton.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    alert(`Erreur en passant en plein écran: ${err.message} (${err.name})`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
     </script>
 </body>
 </html>
