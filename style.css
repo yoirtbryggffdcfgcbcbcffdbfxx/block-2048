@@ -1,0 +1,139 @@
+/* --- Styles Généraux et Disposition de Base --- */
+/* S'assure que le corps prend toute la hauteur de la vue et centre son contenu */
+body {
+    display: flex;
+    flex-direction: column; /* Empile les éléments verticalement */
+    align-items: center;    /* Centre horizontalement */
+    justify-content: flex-start; /* Aligne le contenu vers le haut, ou 'center' si vous préférez */
+    min-height: 100vh;      /* Utilise toute la hauteur de la fenêtre */
+    margin: 0;              /* Supprime la marge par défaut du navigateur */
+    font-family: 'Arial', sans-serif; /* Police plus générique */
+    background-color: #f5f5f5; /* Couleur de fond légère */
+    color: #333; /* Couleur de texte par défaut */
+    padding-top: 20px; /* Petit padding en haut pour le confort */
+    box-sizing: border-box; /* Inclut padding et border dans la largeur/hauteur */
+}
+
+/* Conteneur principal du jeu et des contrôles */
+.game-container {
+    display: flex;
+    flex-direction: column; /* Le canvas et les contrôles s'empilent */
+    align-items: center;    /* Centre le contenu du conteneur (ex: le canvas) */
+    width: 100%;            /* Prend toute la largeur disponible */
+    max-width: 400px;       /* Limite la largeur max pour les grands écrans */
+    padding: 10px;          /* Un peu de padding à l'intérieur */
+    box-sizing: border-box;
+}
+
+/* Styles pour le canvas (zone de jeu) */
+#gameCanvas {
+    /* Style déjà présent dans l'HTML, mais vous pouvez l'ajuster ici si nécessaire */
+    border: 1px solid #ccc;
+    background-color: #eee;
+    display: block;
+    margin-bottom: 20px; /* Espace entre le canvas et les contrôles */
+    width: 100%; /* S'assure que le canvas est réactif */
+    height: auto; /* Maintient le ratio d'aspect */
+    max-height: 500px; /* Limite la hauteur sur les très grands écrans */
+}
+
+
+/* --- Styles Spécifiques aux Boutons de Contrôle --- */
+
+/* Conteneur des boutons de contrôle */
+.controls {
+    display: flex; /* Active Flexbox pour les enfants directs (les boutons) */
+    justify-content: center; /* Centre les boutons horizontalement */
+    gap: 20px; /* Crée un espacement de 20px entre les boutons */
+    width: 100%; /* Prend toute la largeur du conteneur parent */
+    padding: 0 15px; /* Un petit padding horizontal pour éviter que les boutons collent aux bords */
+    box-sizing: border-box; /* Inclut padding dans la largeur */
+    margin-bottom: 20px; /* Espace en dessous des boutons */
+}
+
+/* Styles individuels pour les boutons à l'intérieur de .controls */
+.controls button {
+    padding: 15px 30px; /* Rembourrage intérieur : hauteur / largeur */
+    font-size: 1.2em; /* Taille de la police relative */
+    cursor: pointer; /* Indique que l'élément est cliquable */
+    background-color: #007bff; /* Couleur de fond bleue */
+    color: white; /* Couleur du texte */
+    border: none; /* Pas de bordure */
+    border-radius: 8px; /* Bords arrondis */
+    transition: background-color 0.3s ease, transform 0.1s ease; /* Transition douce pour hover */
+    flex-grow: 1; /* Permet aux boutons de prendre de l'espace si disponible */
+    max-width: 180px; /* Limite la largeur maximale de chaque bouton sur les grands écrans */
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* Petite ombre pour un effet 3D léger */
+}
+
+/* Effet au survol des boutons */
+.controls button:hover {
+    background-color: #0056b3; /* Bleu plus foncé au survol */
+    transform: translateY(-2px); /* Léger mouvement vers le haut */
+}
+
+/* Effet au clic des boutons */
+.controls button:active {
+    transform: translateY(0); /* Retour à la position normale */
+    box-shadow: 0 2px 3px rgba(0,0,0,0.1); /* Ombre plus petite pour un effet "pressé" */
+}
+
+
+/* --- Media Queries pour les Écrans Mobiles --- */
+
+/* Ces styles s'appliqueront pour les écrans de 768px de large ou moins (smartphones, petites tablettes) */
+@media (max-width: 768px) {
+    .controls {
+        flex-direction: row; /* Les boutons restent sur une seule ligne (par défaut de flexbox) */
+        flex-wrap: wrap; /* Permet aux boutons de passer à la ligne si l'espace manque */
+        gap: 10px; /* Réduit l'espace entre les boutons sur mobile */
+        padding: 0 10px; /* Réduit le padding horizontal */
+        margin-top: 15px; /* Ajuste la marge supérieure */
+        margin-bottom: 15px; /* Ajuste la marge inférieure */
+    }
+
+    .controls button {
+        padding: 10px 18px; /* Réduit le rembourrage pour des boutons plus compacts */
+        font-size: 1em; /* Taille de la police plus petite */
+        max-width: 140px; /* Limite la largeur max de chaque bouton encore plus */
+        flex-basis: calc(50% - 5px); /* Chaque bouton prendra environ 50% de la largeur du conteneur moins la moitié du gap */
+        /* Note : Le '5px' vient de la moitié du 'gap: 10px' pour 2 éléments sur une ligne */
+    }
+
+    /* Si vous avez besoin que le canvas soit plus grand ou plus petit sur mobile */
+    #gameCanvas {
+        max-width: 320px; /* Exemple: Limite la largeur du canvas sur mobile */
+        height: auto;
+    }
+
+    /* Optionnel : Si les boutons doivent toujours être en bas de l'écran, même en scrollant */
+    /*
+    .controls-fixed-bottom {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 10px 15px;
+        box-shadow: 0 -3px 10px rgba(0,0,0,0.1);
+        z-index: 1000;
+        display: flex;
+        justify-content: space-around;
+        gap: 10px;
+    }
+    .controls-fixed-bottom button {
+        flex-basis: 45%;
+        // Styles spécifiques pour les boutons fixés
+    }
+    body { padding-bottom: 80px; } // Pour éviter que le contenu ne soit caché par les boutons fixés
+    */
+}
+
+/* Styles pour les écrans très petits (ex: iPhone SE, largeur < 375px) */
+@media (max-width: 375px) {
+    .controls button {
+        padding: 8px 15px; /* Encore plus compact */
+        font-size: 0.9em;
+        max-width: 100px; /* Ou laissez flex-basis faire le travail */
+    }
+}
